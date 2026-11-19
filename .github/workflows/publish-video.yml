@@ -1,0 +1,50 @@
+name: Publish generated Short asset
+
+on:
+  workflow_run:
+    workflows: ["Nova Daily Short"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "GitHub Actions run ID containing the Nova Short artifact"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-asset:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download generated artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+          path: downloaded
+
+      - name: Publish MP4 to public repository path
+        run: |
+          set -e
+          VIDEO="$(find downloaded -type f -name 'nova_short.mp4' -print -quit)"
+          test -n "$VIDEO"
+          mkdir -p public/videos
+          cp "$VIDEO" public/videos/nova_short.mp4
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/videos/nova_short.mp4
+          if git diff --cached --quiet; then
+            echo "No video change to publish."
+          else
+            git commit -m "Publish latest Nova Short video"
+            git push
+          fi
