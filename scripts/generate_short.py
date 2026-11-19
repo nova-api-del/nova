@@ -128,10 +128,19 @@ def make_card(title, sentence, idx, total, path):
 async def main():
     day = datetime.now(timezone.utc).timetuple().tm_yday
     title, facts = TOPICS[(day-1) % len(TOPICS)]
-    # Rotate through topics and keep the output name stable for the daily artifact.
-    text = " ".join(facts)
+    # Expand the narration so each daily video is close to one minute.
+    expansions = [
+        "Scientists use evidence like this to understand how the natural world works, and every new discovery can change what we thought we knew.",
+        "The details matter because small clues often reveal much bigger patterns, helping researchers connect observations into a clearer picture.",
+        "It is a reminder that the world is more complex than it first appears, and there is still so much left to explore.",
+        "Researchers keep studying questions like this because better explanations can lead to new discoveries and useful real-world knowledge.",
+        "So take a second to think about it: something happening far beyond our everyday view can still teach us something important."
+    ]
+    text = "Welcome to Nova Daily Discovery. " + " ".join(
+        f"{fact} {expansions[i]}" for i, fact in enumerate(facts)
+    ) + " Follow Nova for more fascinating discoveries tomorrow."
     audio = OUT / "voice.mp3"
-    communicate = edge_tts.Communicate(text, VOICE, rate="+2%", volume="+0%")
+    communicate = edge_tts.Communicate(text, VOICE, rate="-8%", volume="+0%")
     await communicate.save(str(audio))
     probe = subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1",str(audio)], text=True)
     duration = float(probe.strip())
@@ -150,7 +159,7 @@ async def main():
     run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),
          "-vf","fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","23",
          "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(OUT/"nova_short.mp4")])
-    metadata = {"title": title, "description": "Five fascinating facts in under a minute. Follow Nova for more daily discoveries. #shorts #facts #science",
+    metadata = {"title": title, "description": "Five fascinating facts in about one minute. Follow Nova for more daily discoveries. #shorts #facts #science",
                 "date_utc": datetime.now(timezone.utc).isoformat(), "duration_seconds": round(duration,2),
                 "voice": VOICE, "language": "en"}
     (OUT/"metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
