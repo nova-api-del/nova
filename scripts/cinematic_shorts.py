@@ -207,6 +207,8 @@ def _relevant_result(query: str, title: str, description: str) -> bool:
     all_tokens = _topic_tokens(title + " " + description)
     title_hits = len(wanted & title_tokens)
     total_hits = len(wanted & all_tokens)
+    if "volcan" in wanted and "volcan" in title_tokens:
+        return True
     return total_hits >= 2 and (title_hits >= 1 or total_hits >= 3)
 
 def nasa_video(query: str, used: set[str], dest: Path):
@@ -218,12 +220,14 @@ def nasa_video(query: str, used: set[str], dest: Path):
     words = query.lower().split()
     terms = [query, " ".join(words[:3]), " ".join(words[-2:])]
     if "supervolcano" in query.lower():
-        terms.append("volcano")
+        terms.extend(["volcano", "volcanic eruption", "volcanic ash"])
+    elif "ash" in query.lower():
+        terms.extend(["volcanic ash", "volcano eruption"])
     terms = list(dict.fromkeys(t for t in terms if t))
     seen = set()
     for term in terms:
         try:
-            response = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 20},
+            response = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 40},
                                     headers=headers, timeout=20)
             response.raise_for_status()
             payload = response.json()
@@ -232,7 +236,7 @@ def nasa_video(query: str, used: set[str], dest: Path):
         except Exception as exc:
             print(f"[MEDIA] NASA query={term!r} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
             continue
-        for item in items[:15]:
+        for item in items[:30]:
             data = (item.get("data") or [{}])[0]
             nasa_id = data.get("nasa_id")
             if not nasa_id or nasa_id in used or nasa_id in seen:
@@ -450,35 +454,43 @@ def _download_image(url: str, dest: Path):
         return None
 
 def nasa_image(query: str, used: set[str], dest: Path):
-    """NASA public image library fallback; each image is attributed and animated in the edit."""
-    try:
-        data = requests.get("https://images-api.nasa.gov/search",
-            params={"q": query, "media_type": "image", "page_size": 12},
-            headers={"User-Agent": UA}, timeout=15)
-        data.raise_for_status()
-        items = (data.json().get("collection") or {}).get("items") or []
-        for item in items[:8]:
-            meta = (item.get("data") or [{}])[0]
-            ident = meta.get("nasa_id")
-            title = str(meta.get("title", ""))
-            desc = str(meta.get("description", ""))
-            if not ident or ident in used or not _relevant_result(query, title, desc):
-                continue
-            manifest = requests.get(f"https://images-api.nasa.gov/asset/{ident}",
+    """NASA public image fallback with topic-specific search variants."""
+    words = query.lower().split()
+    terms = [query]
+    if "supervolcano" in query.lower():
+        terms.extend(["volcano", "volcanic eruption", "volcanic ash"])
+    elif "ash" in query.lower():
+        terms.extend(["volcanic ash", "volcano eruption"])
+    for term in dict.fromkeys(terms):
+        try:
+            data = requests.get("https://images-api.nasa.gov/search",
+                params={"q": term, "media_type": "image", "page_size": 30},
                 headers={"User-Agent": UA}, timeout=15)
-            manifest.raise_for_status()
-            assets = (manifest.json().get("collection") or {}).get("items") or []
-            urls = [x.get("href", "") for x in assets]
-            urls = [u for u in urls if re.search(r"\.(jpg|jpeg|png)(?:$|\?)", u, re.I)]
-            for url in urls[:3]:
-                path = _download_image(url, dest)
-                if path:
-                    used.add(ident)
-                    return path, {"file": title, "url": url, "license": "NASA media usage guidance applies",
-                        "artist": meta.get("center", "NASA"), "credit": desc[:500],
-                        "source_id": ident, "source": "NASA", "kind": "licensed_image_animated"}
-    except Exception as exc:
-        print(f"[MEDIA] NASA image fallback error: {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+            data.raise_for_status()
+            items = (data.json().get("collection") or {}).get("items") or []
+            for item in items[:20]:
+                meta = (item.get("data") or [{}])[0]
+                ident = meta.get("nasa_id")
+                title = str(meta.get("title", ""))
+                desc = str(meta.get("description", ""))
+                if not ident or ident in used or not _relevant_result(term, title, desc):
+                    continue
+                manifest = requests.get(f"https://images-api.nasa.gov/asset/{ident}",
+                    headers={"User-Agent": UA}, timeout=15)
+                manifest.raise_for_status()
+                assets = (manifest.json().get("collection") or {}).get("items") or []
+                urls = [x.get("href", "") for x in assets]
+                urls = [u for u in urls if re.search(r"\\.(jpg|jpeg|png)(?:$|\\?)", u, re.I)]
+                for url in urls[:3]:
+                    path = _download_image(url, dest)
+                    if path:
+                        used.add(ident)
+                        return path, {"file": title, "url": url,
+                            "license": "NASA media usage guidance applies",
+                            "artist": meta.get("center", "NASA"), "credit": desc[:500],
+                            "source_id": ident, "source": "NASA", "kind": "licensed_image_animated"}
+        except Exception as exc:
+            print(f"[MEDIA] NASA image query={term!r} error={type(exc).__name__}: {str(exc)[:140]}", flush=True)
     return None, None
 
 def commons_image(query: str, used: set[str], dest: Path):
