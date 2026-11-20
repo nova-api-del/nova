@@ -464,7 +464,7 @@ def find_video(query: str, used: set[str], dest: Path):
     return None, None
 
 async def make_voice(text: str, path: Path):
-    await edge_tts.Communicate(text, VOICE, rate="-3%", volume="+0%").save(str(path))
+    await edge_tts.Communicate(text, VOICE, rate="+3%", volume="+0%").save(str(path))
 
 def make_srt(text: str, duration: float, path: Path):
     words = text.split()
@@ -493,8 +493,8 @@ def build(slot: int):
     voice = work / "voice.mp3"
     asyncio.run(make_voice(narration, voice))
     duration = probe_duration(voice)
-    if not 45 <= duration <= 62:
-        raise RuntimeError(f"Voiceover duration outside 45-62 second target: {duration:.1f}s")
+    if not 45 <= duration <= 64:
+        raise RuntimeError(f"Voiceover duration outside 45-64 second target: {duration:.1f}s")
     srt = work / "captions.srt"
     make_srt(narration, duration, srt)
     used, sources, scenes = set(), [], []
