@@ -91,7 +91,7 @@ def main():
     clip=commons_video(search,work)
     if clip:
         video=work/"video.mp4"
-        run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-i",str(audio),"-t",str(max(1,dur)),"-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
+        run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-i",str(audio),"-t",str(max(1,dur)),"-map","0:v:0","-map","1:a:0","-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
     else:
         imgs=[]; each=max(4.5,dur/len(facts))
         for i,f in enumerate(facts):
