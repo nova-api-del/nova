@@ -41,10 +41,20 @@ def inspect_scene(path: Path):
     if frozen.returncode != 0:
         raise RuntimeError(f"{path.name}: ffmpeg freezedetect failed: {frozen.stderr[-800:]}")
     freeze_time = 0.0
+    starts, ends = [], []
     for line in frozen.stderr.splitlines():
         match = re.search(r"freeze_duration:([0-9.]+)", line)
         if match:
             freeze_time += float(match.group(1))
+        match = re.search(r"freeze_start:([0-9.]+)", line)
+        if match:
+            starts.append(float(match.group(1)))
+        match = re.search(r"freeze_end:([0-9.]+)", line)
+        if match:
+            ends.append(float(match.group(1)))
+    # A freeze that continues through EOF has freeze_start but no freeze_end.
+    if len(starts) > len(ends):
+        freeze_time += max(0.0, duration - starts[-1])
     return duration, black_time, freeze_time
 
 def main():
