@@ -637,7 +637,7 @@ def build(slot: int):
         scene = work / f"scene_{i:02d}.mp4"
         if clip is not None:
             # Every sourced scene is a distinct, subject-matched moving video clip.
-            run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-t",f"{scene_duration:.3f}",
+            run(["ffmpeg","-y","-stream_loop","-1","-ss","3","-i",str(clip),"-t",f"{scene_duration:.3f}",
                  "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,eq=contrast=1.04:saturation=1.12:brightness=0.01,format=yuv420p",
                  "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
         else:

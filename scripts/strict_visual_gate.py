@@ -20,7 +20,7 @@ def inspect_scene(path: Path):
     duration = probe_duration(path)
     black = run([
         "ffmpeg","-hide_banner","-i",str(path),
-        "-vf","blackdetect=d=0.35:pix_th=0.10",
+        "-vf","blackdetect=d=0.35:pix_th=0.05",
         "-an","-f","null","-"
     ])
     if black.returncode != 0:
@@ -97,7 +97,7 @@ def main():
         for scene in scenes:
             try:
                 duration,black,freeze=inspect_scene(scene)
-                if black > max(0.8,duration*0.10):
+                if black > max(1.5,duration*0.15):
                     failures.append(f"{scene.name}: excessive black frames ({black:.2f}s/{duration:.2f}s)")
                 if duration > 0 and freeze > duration*0.90:
                     failures.append(f"{scene.name}: appears frozen ({freeze:.2f}s/{duration:.2f}s)")

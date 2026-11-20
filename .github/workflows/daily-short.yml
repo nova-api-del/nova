@@ -33,7 +33,6 @@ jobs:
         uses: FedericoCarboni/setup-ffmpeg@v3
         with:
           ffmpeg-version: release
-          linking-type: static
           github-token: ${{ github.token }}
       - name: Verify FFmpeg
         run: |
