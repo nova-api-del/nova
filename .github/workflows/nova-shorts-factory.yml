@@ -1,5 +1,10 @@
 name: Nova Shorts Factory
 on:
+  push:
+    paths:
+      - 'scripts/cinematic_shorts.py'
+      - 'scripts/strict_visual_gate.py'
+      - '.github/workflows/nova-shorts-factory.yml'
   workflow_dispatch:
     inputs:
       count:
