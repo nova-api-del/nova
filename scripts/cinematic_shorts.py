@@ -175,7 +175,11 @@ def _topic_tokens(text: str) -> set[str]:
     """Normalize topic words without conflating unrelated words like landscape/landslide."""
     tokens = set()
     for word in re.findall(r"[a-z]{3,}", str(text).lower()):
-        if word.endswith("ing") and len(word) > 5:
+        if word.startswith("erupt"):
+            word = "erupt"
+        elif word.startswith("volcan"):
+            word = "volcan"
+        elif word.endswith("ing") and len(word) > 5:
             word = word[:-3]
         elif word.endswith("ies") and len(word) > 5:
             word = word[:-3] + "y"
