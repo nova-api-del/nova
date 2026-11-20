@@ -337,7 +337,7 @@ def youtube_video(query: str, used: set[str], dest: Path):
             if not video_id or video_id in used:
                 continue
             duration = entry.get("duration")
-            if duration is not None and not 8 <= float(duration) <= 180:
+            if duration is not None and float(duration) < 5:
                 continue
             webpage = str(entry.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}")
             outtmpl = str(dest.with_suffix(".%(ext)s"))
