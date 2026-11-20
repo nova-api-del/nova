@@ -304,6 +304,63 @@ def commons_video(query: str, used: set[str], dest: Path):
             continue
     return None, None
 
+def youtube_video(query: str, used: set[str], dest: Path):
+    """Download a short, topic-matched YouTube clip using yt-dlp.
+    Only Creative Commons results are accepted unless YOUTUBE_ALLOWLIST is set
+    to channel/video IDs explicitly controlled by the operator.
+    """
+    import shutil
+    ytdlp = shutil.which("yt-dlp")
+    if not ytdlp:
+        return None, None
+
+    allowlist = {x.strip().lower() for x in os.getenv("YOUTUBE_ALLOWLIST", "").split(",") if x.strip()}
+    search = f"ytsearch12:{query}"
+    outtmpl = str(dest.with_suffix(".%(ext)s"))
+    cmd = [ytdlp, "--no-playlist", "--no-warnings", "--ignore-errors",
+           "--max-filesize", "120M", "--match-filter", "duration > 8 & duration < 180",
+           "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
+           "--merge-output-format", "mp4", "-o", outtmpl, "--print-json"]
+    if not allowlist:
+        cmd += ["--match-filter", "license ~= '(?i)creative commons'"]
+    else:
+        # Allowlisted sources are explicitly supplied by the operator.
+        pass
+    cmd += [search]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+        if proc.returncode != 0:
+            print(f"[MEDIA] YouTube: no usable result for {query}", flush=True)
+            return None, None
+        for line in reversed(proc.stdout.splitlines()):
+            try:
+                info = json.loads(line)
+            except Exception:
+                continue
+            video_id = str(info.get("id", ""))
+            webpage = str(info.get("webpage_url", ""))
+            channel_id = str(info.get("channel_id", ""))
+            if not video_id or video_id in used or webpage in used:
+                continue
+            if allowlist and not ({video_id.lower(), channel_id.lower()} & allowlist):
+                continue
+            files = sorted(dest.parent.glob(dest.stem + ".*"), key=lambda p: p.stat().st_mtime, reverse=True)
+            clip = next((p for p in files if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")), None)
+            if clip and clip.exists():
+                used.add(video_id)
+                return clip, {
+                    "file": str(info.get("title", query)),
+                    "url": webpage,
+                    "license": str(info.get("license", "Creative Commons / allowlisted source")),
+                    "artist": str(info.get("uploader", "")),
+                    "credit": webpage,
+                    "source": "YouTube",
+                    "source_id": video_id
+                }
+    except Exception as exc:
+        print(f"[MEDIA] YouTube error: {type(exc).__name__}: {str(exc)[:180]}", flush=True)
+    return None, None
+
 def find_video(query: str, used: set[str], dest: Path):
     clip, attribution = nasa_video(query, used, dest)
     if clip:
@@ -577,7 +634,7 @@ def generate_ai_image(query: str, dest: Path):
 
 def find_video(query: str, used: set[str], dest: Path):
     """Try several independent free libraries before optional AI imagery."""
-    providers = (nasa_video, pixabay_video, pexels_video, archive_video, commons_video)
+    providers = (youtube_video,)
     for provider in providers:
         try:
             clip, attribution = provider(query, used, dest)
@@ -586,7 +643,7 @@ def find_video(query: str, used: set[str], dest: Path):
                 return clip, attribution
         except Exception as exc:
             print(f"[MEDIA] {provider.__name__}: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-    # Optional true AI video fallback. It runs only when a Wan2.1 model directory is explicitly configured.
+    # No non-YouTube provider is used: if YouTube has no usable clip, AI may optionally fill the gap.
     if os.getenv("AI_MODE", "auto").lower() in ("auto", "wan", "ai") and wan_available():
         try:
             prompt = ("Photorealistic cinematic science documentary footage, no text, no logos, "
@@ -606,105 +663,3 @@ def find_video(query: str, used: set[str], dest: Path):
         except Exception as exc:
             print(f"[MEDIA] Wan2.1: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
     return None, None
-
-async def make_voice(text: str, path: Path):
-    await edge_tts.Communicate(text, VOICE, rate="+3%", volume="+0%").save(str(path))
-
-def make_srt(text: str, duration: float, path: Path):
-    words = text.split()
-    chunks, current = [], []
-    for word in words:
-        current.append(word)
-        if len(current) >= 6 or len(" ".join(current)) > 38:
-            chunks.append(" ".join(current)); current=[]
-    if current: chunks.append(" ".join(current))
-    weights = [len(x) for x in chunks]
-    total = sum(weights) or 1
-    cursor, rows = 0.0, []
-    for chunk, weight in zip(chunks, weights):
-        span = duration * weight / total
-        rows.append((cursor, min(duration, cursor+span), chunk)); cursor += span
-    def stamp(t):
-        ms = int(t*1000); h,ms=divmod(ms,3600000); m,ms=divmod(ms,60000); s,ms=divmod(ms,1000)
-        return f"{h:02}:{m:02}:{s:02},{ms:03}"
-    path.write_text("\n\n".join(f"{i}\n{stamp(a)} --> {stamp(b)}\n{line}" for i,(a,b,line) in enumerate(rows,1)), encoding="utf-8")
-
-def build(slot: int):
-    topic = TOPICS[slot % len(TOPICS)]
-    work = OUT / f"cinematic_{datetime.now(timezone.utc):%Y%m%d}_{slot+1}"
-    work.mkdir(parents=True, exist_ok=True)
-    narration = topic["hook"] + " " + " ".join(f"{fact} {detail}" for fact, detail in zip(topic["facts"], topic["details"])) + " Follow Nova for more discoveries."
-    voice = work / "voice.mp3"
-    asyncio.run(make_voice(narration, voice))
-    duration = probe_duration(voice)
-    if not 45 <= duration <= 64:
-        raise RuntimeError(f"Voiceover duration outside 45-64 second target: {duration:.1f}s")
-    srt = work / "captions.srt"
-    make_srt(narration, duration, srt)
-    used, sources, scenes = set(), [], []
-    generated_ai = 0
-    scene_duration = duration / len(topic["queries"])
-    for i, query in enumerate(topic["queries"]):
-        clip, attribution = find_video(query, used, work / f"source_{i}")
-        scene = work / f"scene_{i:02d}.mp4"
-        if clip is not None:
-            # Every sourced scene is a distinct, subject-matched moving video clip.
-            run(["ffmpeg","-y","-stream_loop","-1","-ss","3","-i",str(clip),"-t",f"{scene_duration:.3f}",
-                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,eq=contrast=1.04:saturation=1.12:brightness=0.01,format=yuv420p",
-                 "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
-        else:
-            # First use a reusable, topic-matched NASA/Commons still and animate it.
-            still, attribution = find_image(query, used, work / f"still_{i}")
-            if still is None:
-                # Optional AI imagery is capped; no blank/text-card scene is ever emitted.
-                if generated_ai >= 2:
-                    raise RuntimeError(f"QUALITY GATE: no licensed footage or image found for scene {i+1}: {query}; AI fallback limit reached.")
-                still, attribution = generate_ai_image(query, work / f"ai_scene_{i}")
-                if still is None:
-                    raise RuntimeError(f"QUALITY GATE: no usable video, licensed image, or AI image for scene {i+1}: {query}.")
-                generated_ai += 1
-            zoom_frames = max(1, int(scene_duration * 30))
-            run(["ffmpeg","-y","-loop","1","-i",str(still),"-t",f"{scene_duration:.3f}",
-                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0007,1.12)':d={zoom_frames}:s=1080x1920:fps=30,setsar=1,eq=contrast=1.04:saturation=1.10,format=yuv420p",
-                 "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
-        scenes.append(scene); sources.append(attribution)
-    concat = work / "scenes.txt"
-    concat.write_text("\n".join(f"file '{p.resolve()}'" for p in scenes), encoding="utf-8")
-    final = work / "final.mp4"
-    subtitle = f"subtitles=filename={srt.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=10,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=45'"
-    run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(voice),"-t",f"{duration:.3f}",
-         "-vf",subtitle,"-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-crf","21",
-         "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(final)])
-    actual = probe_duration(final)
-    if actual < 24 or final.stat().st_size < 2_000_000:
-        raise RuntimeError(f"QUALITY GATE: output too short or too small ({actual:.1f}s, {final.stat().st_size} bytes)")
-    streams = json.loads(subprocess.check_output(["ffprobe","-v","error","-show_entries","stream=codec_type,width,height","-of","json",str(final)],text=True))
-    video = next((s for s in streams["streams"] if s.get("codec_type")=="video"),{})
-    audio = any(s.get("codec_type")=="audio" for s in streams["streams"])
-    if video.get("width") != 1080 or video.get("height") != 1920 or not audio:
-        raise RuntimeError("QUALITY GATE: expected 1080x1920 video and narration audio")
-    # Five distinct, attributed visual assets are mandatory. At least one must be actual video;
-    # the remaining scenes may use licensed stills with continuous Ken Burns motion.
-    sourced_assets = [x for x in sources if x.get("kind") != "ai_generated_image_animated"]
-    moving_video_sources = [x for x in sources if x.get("kind") not in ("ai_generated_image_animated", "licensed_image_animated")]
-    if len(sources) != 5 or len({x.get("url") for x in sourced_assets}) != len(sourced_assets) or len(sourced_assets) < 3 or len(moving_video_sources) < 1 or generated_ai > 2:
-        raise RuntimeError("QUALITY GATE: require five distinct attributed scenes, at least three licensed non-AI assets including one real video, and no more than two AI-generated scenes")
-    output = OUT / f"short_{slot+1:02d}.mp4"
-    output.write_bytes(final.read_bytes())
-    metadata = {
-        "title":topic["title"],"description":"Real-world footage, science explained. Follow Nova for more. #shorts #science #nature #documentary",
-        "duration_seconds":round(actual,2),"language":"en","voice":VOICE,
-        "visual_type":"five_distinct_animated_scenes","quality_gate":"passed",
-        "sources":sources,"created_at":datetime.now(timezone.utc).isoformat()
-    }
-    (OUT / f"short_{slot+1:02d}.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
-    print(json.dumps({"output":str(output),"metadata":metadata},ensure_ascii=False))
-
-def main():
-    parser=argparse.ArgumentParser()
-    parser.add_argument("--slot",type=int,default=0)
-    args=parser.parse_args()
-    build(args.slot)
-
-if __name__=="__main__":
-    main()
