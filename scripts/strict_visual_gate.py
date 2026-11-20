@@ -110,8 +110,8 @@ def main():
         video_sources=[x for x in sources if x.get("kind") not in ("ai_generated_image_animated","licensed_image_animated")]
         if len(sourced)<3:
             failures.append(f"{stem}: fewer than three distinct licensed non-AI visual assets")
-        if len(video_sources)<1:
-            failures.append(f"{stem}: no actual moving-video source found")
+        if len(video_sources)<3:
+            failures.append(f"{stem}: fewer than three actual moving-video sources found")
         if sum(x.get("kind")=="ai_generated_image_animated" for x in sources)>2:
             failures.append(f"{stem}: more than two AI-generated still scenes")
 

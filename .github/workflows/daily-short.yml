@@ -66,7 +66,9 @@ jobs:
           assert m["visual_quality_gate"] == "passed"
           assert 45 <= m["duration_seconds"] <= 64
           assert len(m["sources"]) == 5
-          print("Ready:", m["title"], m["duration_seconds"], "seconds")
+          assert sum(x.get("kind") not in ("ai_generated_image_animated", "licensed_image_animated") for x in m["sources"]) >= 3
+          assert sum(x.get("kind") == "ai_generated_image_animated" for x in m["sources"]) <= 2
+          print("Ready:", m["title"], m["duration_seconds"], "seconds; three real videos verified")
           PY
       - name: Upload approved Short artifact
         uses: actions/upload-artifact@v4

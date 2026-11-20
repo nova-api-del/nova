@@ -69,7 +69,7 @@ jobs:
               assert 45 <= item.get('duration_seconds', 0) <= 64, path
               assert len(item['sources']) == 5, path
               assert sum(source.get('kind') != 'ai_generated_image_animated' for source in item['sources']) >= 3, path
-              assert sum(source.get('kind') not in ('ai_generated_image_animated', 'licensed_image_animated') for source in item['sources']) >= 1, path
+              assert sum(source.get('kind') not in ('ai_generated_image_animated', 'licensed_image_animated') for source in item['sources']) >= 3, path
               assert sum(source.get('kind') == 'ai_generated_image_animated' for source in item['sources']) <= 2, path
           print(f'PASS: {len(files)} cinematic video(s)')
           PY

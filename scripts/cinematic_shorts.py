@@ -192,6 +192,11 @@ def _topic_tokens(text: str) -> set[str]:
 
 def _relevant_result(query: str, title: str, description: str) -> bool:
     wanted = _topic_tokens(query)
+    title_lower = title.lower()
+    if any(word in title_lower for word in ("profile", "interview")) and not any(
+        word in query.lower() for word in ("scientist", "profile", "interview")
+    ):
+        return False
     # Science-footage synonyms: an eruption clip is often indexed without the
     # phrase "volcanic ash", even when its description documents the ash plume.
     if "ash" in wanted:
@@ -654,7 +659,7 @@ def build(slot: int):
     concat = work / "scenes.txt"
     concat.write_text("\n".join(f"file '{p.resolve()}'" for p in scenes), encoding="utf-8")
     final = work / "final.mp4"
-    subtitle = f"subtitles=filename={srt.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=18,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=250'"
+    subtitle = f"subtitles=filename={srt.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=10,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=150'"
     run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(voice),"-t",f"{duration:.3f}",
          "-vf",subtitle,"-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","veryfast","-crf","21",
          "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(final)])
