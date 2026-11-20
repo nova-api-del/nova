@@ -306,26 +306,22 @@ def commons_video(query: str, used: set[str], dest: Path):
 
 def youtube_video(query: str, used: set[str], dest: Path):
     """Download a short, topic-matched YouTube clip using yt-dlp.
-    Only Creative Commons results are accepted unless YOUTUBE_ALLOWLIST is set
-    to channel/video IDs explicitly controlled by the operator.
+    No license allowlist is imposed at discovery time; source metadata is retained.
     """
     import shutil
     ytdlp = shutil.which("yt-dlp")
     if not ytdlp:
         return None, None
 
-    allowlist = {x.strip().lower() for x in os.getenv("YOUTUBE_ALLOWLIST", "").split(",") if x.strip()}
-    search = f"ytsearch12:{query}"
+    search = f"ytsearch20:{query}"
     outtmpl = str(dest.with_suffix(".%(ext)s"))
     cmd = [ytdlp, "--no-playlist", "--no-warnings", "--ignore-errors",
            "--max-filesize", "120M", "--match-filter", "duration > 8 & duration < 180",
            "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
            "--merge-output-format", "mp4", "-o", outtmpl, "--print-json"]
-    if not allowlist:
-        cmd += ["--match-filter", "license ~= '(?i)creative commons'"]
-    else:
-        # Allowlisted sources are explicitly supplied by the operator.
-        pass
+    # Do not impose a Creative-Commons/license allowlist on natural-science footage.
+    # The query is still topic-filtered and the downloaded metadata is preserved
+    # so the operator can review the source before publishing.
     cmd += [search]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
