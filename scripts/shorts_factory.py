@@ -94,7 +94,7 @@ def make_captions(text,duration,path):
     def stamp(sec):
         ms=int(round(sec*1000)); h,ms=divmod(ms,3600000); m,ms=divmod(ms,60000); sec,ms=divmod(ms,1000)
         return f'{h:02d}:{m:02d}:{sec:02d},{ms:03d}'
-    path.write_text('\\n\\n'.join(f'{i}\\n{stamp(a)} --> {stamp(b)}\\n{t}' for i,(a,b,t) in enumerate(rows,1)),encoding='utf-8')
+    path.write_text('\n\n'.join(f'{i}\n{stamp(a)} --> {stamp(b)}\n{t}' for i,(a,b,t) in enumerate(rows,1)),encoding='utf-8')
     return path
 
 def main():
