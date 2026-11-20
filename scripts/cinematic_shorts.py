@@ -714,12 +714,54 @@ def find_video(query: str, used: set[str], dest: Path):
 
 async def _make_voice(text: str, path: Path):
     words = len(re.findall(r"\b[\w'-]+\b", text))
-    # Aim for roughly 55 seconds while keeping a natural speaking rate.
     rate = round((words / 145 / (55 / 60) - 1) * 100)
     rate = max(-10, min(30, rate))
     communicate = edge_tts.Communicate(text, VOICE, rate=f"{rate:+d}%")
-    await communicate.save(str(path))
-
+    boundaries = []
+    with path.open("wb") as audio_file:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_file.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                boundaries.append({
+                    "start": chunk["offset"] / 10_000_000,
+                    "end": (chunk["offset"] + chunk["duration"]) / 10_000_000,
+                    "text": chunk["text"],
+                })
+    if not boundaries:
+        raise RuntimeError("Edge TTS returned no word timings; refusing unsynchronized captions.")
+    ass_path = path.with_suffix(".ass")
+    colors = ["&H0000D7FF", "&H0000F5A0", "&H00FFB347", "&H00E58BFF", "&H00FFFFFF"]
+    def ass_time(value):
+        centis = max(0, round(value * 100))
+        return f"{centis // 360000:01d}:{(centis // 6000) % 60:02d}:{(centis // 100) % 60:02d}.{centis % 100:02d}"
+    groups, current = [], []
+    for item in boundaries:
+        current.append(item)
+        phrase = " ".join(x["text"] for x in current)
+        if len(current) >= 4 or len(phrase) >= 25 or re.search(r"[.!?]$", item["text"]):
+            groups.append(current)
+            current = []
+    if current:
+        groups.append(current)
+    lines = [
+        "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920",
+        "ScaledBorderAndShadow: yes", "", "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        "Style: TikTok,DejaVu Sans,66,&H00FFFFFF,&H000000FF,&H00101010,&H99000000,-1,0,0,0,100,100,0,0,1,5,2,5,30,30,0,1",
+        "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+    ]
+    for group in groups:
+        start, end = group[0]["start"], group[-1]["end"] + 0.12
+        rendered = []
+        for idx, item in enumerate(group):
+            color = colors[(len(lines) + idx) % len(colors)]
+            safe = item["text"].replace("{", r"\{").replace("}", r"\}")
+            rendered.append(r"{\c" + color + r"\b1}" + safe)
+        phrase = " ".join(rendered)
+        lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},TikTok,,0,0,0,,{{\\an5\\pos(540,1400)}}{phrase}")
+    ass_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return ass_path
 
 def _ffprobe_streams(path: Path):
     raw = subprocess.check_output([
@@ -759,7 +801,7 @@ def build(slot: int):
         *[f"{fact} {detail}" for fact, detail in zip(topic["facts"], topic["details"])]
     ])
     voice_path = OUT / f"voice_{slot}.mp3"
-    asyncio.run(_make_voice(narration, voice_path))
+    subtitle_path = asyncio.run(_make_voice(narration, voice_path))
     voice_seconds = probe_duration(voice_path)
     if not 45 <= voice_seconds <= 64:
         raise RuntimeError(
@@ -809,7 +851,9 @@ def build(slot: int):
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(silent_video), "-i", str(voice_path),
-        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-vf", f"subtitles={subtitle_path.as_posix()}",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-t", f"{voice_seconds:.3f}", "-movflags", "+faststart", str(final_video)
     ])
