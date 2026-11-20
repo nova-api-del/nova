@@ -345,19 +345,42 @@ def youtube_video(query: str, used: set[str], dest: Path):
                 if old_file.is_file():
                     old_file.unlink(missing_ok=True)
 
-            download_cmd = common + [
-                "--no-playlist", "--max-filesize", "120M",
-                "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
-                "--merge-output-format", "mp4", "-o", outtmpl, "--print-json", webpage
-            ]
-            proc = subprocess.run(download_cmd, capture_output=True, text=True, timeout=240)
-            files = sorted(
-                [p for p in dest.parent.glob(dest.stem + ".*")
-                 if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")],
-                key=lambda p: p.stat().st_mtime,
-                reverse=True
-            )
-            clip = next((p for p in files if p.exists() and p.stat().st_size > 100_000), None)
+            clip = None
+            proc = None
+            info = {}
+            # Data-center IPs can be challenged by YouTube's default web client.
+            # Try clients that do not require a logged-in browser session first.
+            for player_client in ("android_vr", "web_embedded", "tv"):
+                download_cmd = common + [
+                    "--extractor-args", f"youtube:player_client={player_client}",
+                    "--no-playlist", "--max-filesize", "120M",
+                    "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
+                    "--merge-output-format", "mp4", "-o", outtmpl, "--print-json", webpage
+                ]
+                proc = subprocess.run(download_cmd, capture_output=True, text=True, timeout=240)
+                files = sorted(
+                    [p for p in dest.parent.glob(dest.stem + ".*")
+                     if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")],
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True
+                )
+                clip = next((p for p in files if p.exists() and p.stat().st_size > 100_000), None)
+                if clip:
+                    for line in reversed(proc.stdout.splitlines()):
+                        try:
+                            candidate = json.loads(line)
+                            if candidate.get("id"):
+                                info = candidate
+                                break
+                        except Exception:
+                            continue
+                    print(f"[MEDIA] YouTube downloaded {video_id} using {player_client}", flush=True)
+                    break
+                print(
+                    f"[MEDIA] YouTube {video_id} via {player_client}: "
+                    f"{proc.stderr[-300:]}",
+                    flush=True
+                )
             if not clip:
                 print(
                     f"[MEDIA] YouTube candidate {video_id} unavailable: "
