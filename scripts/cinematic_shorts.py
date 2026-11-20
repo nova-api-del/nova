@@ -480,7 +480,7 @@ def nasa_image(query: str, used: set[str], dest: Path):
                 manifest.raise_for_status()
                 assets = (manifest.json().get("collection") or {}).get("items") or []
                 urls = [x.get("href", "") for x in assets]
-                urls = [u for u in urls if re.search(r"\\.(jpg|jpeg|png)(?:$|\\?)", u, re.I)]
+                urls = [u for u in urls if re.search(r"\.(jpg|jpeg|png)(?:$|\?)", u, re.I)]
                 for url in urls[:3]:
                     path = _download_image(url, dest)
                     if path:
