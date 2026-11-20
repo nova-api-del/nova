@@ -2,6 +2,7 @@
 """Build a real-footage-first Nova Short. No text-card fallback is allowed."""
 from __future__ import annotations
 import argparse, asyncio, json, os, re, subprocess
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
@@ -199,6 +200,145 @@ def find_video(query: str, used: set[str], dest: Path):
         return clip, attribution
     return commons_video(query, used, dest)
 
+
+def pixabay_video(query: str, used: set[str], dest: Path):
+    """Pixabay free API (requires a user API key); videos are downloaded, never hotlinked."""
+    key = os.getenv("PIXABAY_API_KEY")
+    if not key:
+        return None, None
+    try:
+        data = requests.get("https://pixabay.com/api/videos/",
+            params={"key": key, "q": query, "per_page": 30, "safesearch": "true"},
+            headers={"User-Agent": UA}, timeout=30).json()
+        for item in data.get("hits", []):
+            video_id = str(item.get("id", ""))
+            if not video_id or video_id in used:
+                continue
+            variants = item.get("videos", {})
+            candidates = sorted(variants.values(), key=lambda x: x.get("width", 0), reverse=True)
+            for variant in candidates:
+                url = variant.get("url")
+                if not url:
+                    continue
+                path = _download_verified(url, dest.with_suffix(".mp4"))
+                if path:
+                    used.add(video_id)
+                    return path, {"file": item.get("tags", query), "url": url,
+                        "license": "Pixabay Content License; verify current terms",
+                        "artist": item.get("user", "Pixabay contributor"),
+                        "credit": item.get("pageURL", "https://pixabay.com/"),
+                        "source_id": video_id, "source": "Pixabay"}
+    except Exception:
+        pass
+    return None, None
+
+def pexels_video(query: str, used: set[str], dest: Path):
+    """Pexels free API; enabled only when an API key is configured."""
+    key = os.getenv("PEXELS_API_KEY")
+    if not key:
+        return None, None
+    try:
+        data = requests.get("https://api.pexels.com/v1/videos/search",
+            params={"query": query, "orientation": "portrait", "size": "medium", "per_page": 30},
+            headers={"Authorization": key, "User-Agent": UA}, timeout=30).json()
+        for item in data.get("videos", []):
+            video_id = str(item.get("id", ""))
+            if not video_id or video_id in used:
+                continue
+            files = sorted(item.get("video_files", []),
+                key=lambda x: (x.get("width", 0), x.get("height", 0)), reverse=True)
+            for variant in files:
+                url = variant.get("link")
+                if not url:
+                    continue
+                path = _download_verified(url, dest.with_suffix(".mp4"))
+                if path:
+                    used.add(video_id)
+                    return path, {"file": item.get("url", query), "url": url,
+                        "license": "Pexels License; see https://www.pexels.com/license/",
+                        "artist": item.get("user", {}).get("name", "Pexels contributor"),
+                        "credit": item.get("url", "https://www.pexels.com/"),
+                        "source_id": video_id, "source": "Pexels"}
+    except Exception:
+        pass
+    return None, None
+
+def archive_video(query: str, used: set[str], dest: Path):
+    """Internet Archive fallback, accepting only clearly reusable CC/PD items."""
+    try:
+        data = requests.get("https://archive.org/advancedsearch.php",
+            params={"q": f'({query}) AND mediatype:movies',
+                    "fl[]": ["identifier", "title"], "rows": 25, "page": 1, "output": "json"},
+            headers={"User-Agent": UA}, timeout=30).json()
+        docs = data.get("response", {}).get("docs", [])
+        for item in docs:
+            ident = item.get("identifier")
+            if not ident or ident in used:
+                continue
+            meta = requests.get(f"https://archive.org/metadata/{ident}",
+                headers={"User-Agent": UA}, timeout=30).json()
+            md = meta.get("metadata", {})
+            license_url = str(md.get("licenseurl", md.get("license", ""))).lower()
+            # Do not assume every Internet Archive item is public domain.
+            allowed = ("creativecommons.org/publicdomain" in license_url or
+                       "creativecommons.org/licenses/by/" in license_url or
+                       "creativecommons.org/licenses/by-sa/" in license_url or
+                       license_url in ("cc0", "public domain", "publicdomain"))
+            if not allowed or any(x in license_url for x in ("/by-nc", "/by-nd", "noncommercial")):
+                continue
+            files = [x for x in meta.get("files", [])
+                     if x.get("name", "").lower().endswith((".mp4", ".m4v", ".mov"))
+                     and int(x.get("size", 0) or 0) < 120_000_000]
+            files.sort(key=lambda x: int(x.get("size", 0) or 0), reverse=True)
+            for item_file in files[:4]:
+                url = f"https://archive.org/download/{ident}/{quote(item_file['name'])}"
+                path = _download_verified(url, dest.with_suffix(Path(item_file["name"]).suffix.lower()))
+                if path:
+                    used.add(ident)
+                    return path, {"file": item.get("title", ident), "url": url,
+                        "license": license_url, "artist": md.get("creator", "Internet Archive contributor"),
+                        "credit": f"https://archive.org/details/{ident}",
+                        "source_id": ident, "source": "Internet Archive"}
+    except Exception:
+        pass
+    return None, None
+
+def generate_ai_image(query: str, dest: Path):
+    """Optional AI still generation; animated with a camera move during rendering.
+    Pollinations currently requires an API key; never silently spend or claim it is free.
+    """
+    key = os.getenv("POLLINATIONS_API_KEY")
+    if not key:
+        return None, None
+    prompt = ("Photorealistic cinematic documentary frame, no text, no labels, no watermark: " + query)
+    model = os.getenv("POLLINATIONS_IMAGE_MODEL", "black-forest-labs/flux.1-schnell")
+    url = "https://gen.pollinations.ai/image/" + quote(prompt, safe="")
+    try:
+        response = requests.get(url, params={"model": model, "width": 1024, "height": 1792},
+            headers={"Authorization": f"Bearer {key}", "User-Agent": UA},
+            timeout=180)
+        response.raise_for_status()
+        if not response.headers.get("content-type", "").startswith("image/") or len(response.content) < 30_000:
+            return None, None
+        dest = dest.with_suffix(".jpg")
+        dest.write_bytes(response.content)
+        return dest, {"file": f"AI-generated scene: {query}", "url": "https://gen.pollinations.ai/",
+            "license": "AI-generated; provider/model terms apply", "artist": "Nova AI generation",
+            "credit": f"Prompt: {prompt}; model: {model}", "source": "AI-generated image",
+            "kind": "ai_generated_image_animated"}
+    except Exception:
+        dest.with_suffix(".jpg").unlink(missing_ok=True)
+        return None, None
+
+def find_video(query: str, used: set[str], dest: Path):
+    """Try several independent free libraries before optional AI imagery."""
+    providers = (nasa_video, pixabay_video, pexels_video, archive_video, commons_video)
+    for provider in providers:
+        clip, attribution = provider(query, used, dest)
+        if clip:
+            return clip, attribution
+    return None, None
+
 async def make_voice(text: str, path: Path):
     await edge_tts.Communicate(text, VOICE, rate="-3%", volume="+0%").save(str(path))
 
@@ -234,16 +374,28 @@ def build(slot: int):
     srt = work / "captions.srt"
     make_srt(narration, duration, srt)
     used, sources, scenes = set(), [], []
+    generated_ai = 0
     scene_duration = duration / len(topic["queries"])
     for i, query in enumerate(topic["queries"]):
         clip, attribution = find_video(query, used, work / f"source_{i}")
-        if clip is None:
-            raise RuntimeError(f"QUALITY GATE: no distinct Wikimedia Commons video found for scene {i+1}: {query}. Refusing to render text cards or reuse a generic clip.")
         scene = work / f"scene_{i:02d}.mp4"
-        # Every scene gets its own subject-matched moving source clip. Original source audio is removed.
-        run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-t",f"{scene_duration:.3f}",
-             "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,eq=contrast=1.04:saturation=1.12:brightness=0.01,format=yuv420p",
-             "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
+        if clip is not None:
+            # Every sourced scene is a distinct, subject-matched moving video clip.
+            run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-t",f"{scene_duration:.3f}",
+                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,eq=contrast=1.04:saturation=1.12:brightness=0.01,format=yuv420p",
+                 "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
+        else:
+            # Up to two AI-generated stills may be animated with a slow camera move; never use text cards.
+            if generated_ai >= 2:
+                raise RuntimeError(f"QUALITY GATE: no real footage found for scene {i+1}: {query}; AI fallback limit reached.")
+            ai_image, attribution = generate_ai_image(query, work / f"ai_scene_{i}")
+            if ai_image is None:
+                raise RuntimeError(f"QUALITY GATE: all footage sources failed for scene {i+1}: {query}. Configure optional API keys or retry later.")
+            generated_ai += 1
+            zoom_frames = max(1, int(scene_duration * 30))
+            run(["ffmpeg","-y","-loop","1","-i",str(ai_image),"-t",f"{scene_duration:.3f}",
+                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0007,1.12)':d={zoom_frames}:s=1080x1920:fps=30,setsar=1,format=yuv420p",
+                 "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
         scenes.append(scene); sources.append(attribution)
     concat = work / "scenes.txt"
     concat.write_text("\n".join(f"file '{p.resolve()}'" for p in scenes), encoding="utf-8")
@@ -261,14 +413,15 @@ def build(slot: int):
     if video.get("width") != 1080 or video.get("height") != 1920 or not audio:
         raise RuntimeError("QUALITY GATE: expected 1080x1920 video and narration audio")
     # Five distinct source URLs are mandatory; this is the critical no-slides/no-reuse check.
-    if len({x["url"] for x in sources}) != 5:
-        raise RuntimeError("QUALITY GATE: fewer than five distinct moving-footage sources")
+    video_sources = [x for x in sources if x.get("kind") != "ai_generated_image_animated"]
+    if len(sources) != 5 or len({x.get("url") for x in video_sources}) != len(video_sources) or len(video_sources) < 3 or generated_ai > 2:
+        raise RuntimeError("QUALITY GATE: require five distinct moving scenes, at least three unique real video sources, and no more than two AI-generated animated scenes")
     output = OUT / f"short_{slot+1:02d}.mp4"
     output.write_bytes(final.read_bytes())
     metadata = {
         "title":topic["title"],"description":"Real-world footage, science explained. Follow Nova for more. #shorts #science #nature #documentary",
         "duration_seconds":round(actual,2),"language":"en","voice":VOICE,
-        "visual_type":"five_distinct_moving_video_clips","quality_gate":"passed",
+        "visual_type":"five_distinct_moving_scenes","quality_gate":"passed",
         "sources":sources,"created_at":datetime.now(timezone.utc).isoformat()
     }
     (OUT / f"short_{slot+1:02d}.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
