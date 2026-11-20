@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       COUNT: ${{ github.event.inputs.count || '6' }}
     steps:
@@ -45,3 +45,10 @@ jobs:
           name: nova-metadata-${{ github.run_number }}
           path: output/*.json
           retention-days: 7
+      - name: Publish downloadable video release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nova-shorts-${{ github.run_number }}
+          name: Nova Shorts ${{ github.run_number }}
+          files: output/*.mp4
+          generate_release_notes: false
