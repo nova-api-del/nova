@@ -39,7 +39,7 @@ FACTS={
 "Strangest Natural Phenomena":["Auroras happen when energetic particles interact with gases in Earth's upper atmosphere.","Some rocks can move across desert surfaces when rare combinations of ice and wind occur.","Lightning can appear in volcanic plumes during major eruptions.","Under the right conditions, water can freeze and boil at the same time.","Nature can produce effects that look impossible until the physics is understood."],
 "Technology That Changed Everything":["The first web page was published in 1991.","Modern processors contain billions of transistors.","GPS receivers determine position by comparing signals from multiple satellites.","Machine learning systems can identify patterns across enormous datasets.","Technology changes fastest when old assumptions are challenged."]
 }
-def run(cmd): subprocess.run(cmd,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+def run(cmd): subprocess.run(cmd,check=True)
 def font(n,b=False):
     p="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if b else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     return ImageFont.truetype(p,n)
@@ -98,7 +98,7 @@ def main():
             p=work/f"scene{i}.jpg"; fallback(title,f,p,i,len(facts)); imgs.append(p)
         concat=work/"concat.txt"; lines=[]
         for p in imgs: lines += [f"file '{p}'",f"duration {each:.3f}"]
-        lines.append(f"file '{imgs[-1]}'"); concat.write_text("\\n".join(lines))
+        lines.append(f"file '{imgs[-1]}'"); concat.write_text("\n".join(lines))
         video=work/"video.mp4"
         run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),"-vf","zoompan=z='min(zoom+0.0008,1.12)':d=1:s=1080x1920:fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
     meta={"title":title+" #"+str(args.slot+1),"description":"A fast science and nature discovery. Follow Nova for more. #shorts #facts #science #education","date_utc":datetime.now(timezone.utc).isoformat(),"topic":title,"slot":args.slot,"duration_seconds":round(dur,1)}
