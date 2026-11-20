@@ -305,54 +305,88 @@ def commons_video(query: str, used: set[str], dest: Path):
     return None, None
 
 def youtube_video(query: str, used: set[str], dest: Path):
-    """Download a short, topic-matched YouTube clip using yt-dlp.
-    No license allowlist is imposed at discovery time; source metadata is retained.
-    """
+    """Search YouTube, then try several individual results until one downloads."""
     import shutil
     ytdlp = shutil.which("yt-dlp")
     if not ytdlp:
+        print("[MEDIA] yt-dlp executable is missing", flush=True)
         return None, None
 
-    search = f"ytsearch10:{query}"
-    outtmpl = str(dest.with_suffix(".%(ext)s"))
-    cmd = [ytdlp, "--no-playlist", "--no-warnings", "--ignore-errors",
-           "--max-filesize", "120M", "--match-filter", "duration > 8 & duration < 180",
-           "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
-           "--merge-output-format", "mp4", "-o", outtmpl, "--print-json"]
-    # Do not impose a Creative-Commons/license allowlist on natural-science footage.
-    # The query is still topic-filtered and the downloaded metadata is preserved
-    # so the operator can review the source before publishing.
-    cmd += [search]
+    common = [ytdlp, "--no-warnings", "--ignore-errors", "--no-progress",
+              "--js-runtimes", "node", "--remote-components", "ejs:github"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
-        if proc.returncode != 0:
-            print(f"[MEDIA] YouTube: no usable result for {query}", flush=True)
+        search_cmd = common + ["--flat-playlist", "--dump-single-json", f"ytsearch15:{query}"]
+        search_proc = subprocess.run(search_cmd, capture_output=True, text=True, timeout=120)
+        if search_proc.returncode != 0 or not search_proc.stdout.strip():
+            print(
+                f"[MEDIA] YouTube search failed for {query}: "
+                f"{search_proc.stderr[-900:]}",
+                flush=True
+            )
             return None, None
-        for line in reversed(proc.stdout.splitlines()):
-            try:
-                info = json.loads(line)
-            except Exception:
+        try:
+            search_data = json.loads(search_proc.stdout)
+        except json.JSONDecodeError:
+            print(f"[MEDIA] YouTube returned invalid search JSON for {query}: {search_proc.stdout[-500:]}", flush=True)
+            return None, None
+
+        entries = search_data.get("entries") or []
+        print(f"[MEDIA] YouTube search results for {query}: {len(entries)}", flush=True)
+        for entry in entries[:12]:
+            video_id = str(entry.get("id") or "")
+            if not video_id or video_id in used:
                 continue
-            video_id = str(info.get("id", ""))
-            webpage = str(info.get("webpage_url", ""))
-            channel_id = str(info.get("channel_id", ""))
-            if not video_id or video_id in used or webpage in used:
+            duration = entry.get("duration")
+            if duration is not None and not 8 <= float(duration) <= 180:
                 continue
-            files = sorted(dest.parent.glob(dest.stem + ".*"), key=lambda p: p.stat().st_mtime, reverse=True)
-            clip = next((p for p in files if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")), None)
-            if clip and clip.exists():
-                used.add(video_id)
-                return clip, {
-                    "file": str(info.get("title", query)),
-                    "url": webpage,
-                    "license": str(info.get("license", "YouTube source; license not verified")),
-                    "artist": str(info.get("uploader", "")),
-                    "credit": webpage,
-                    "source": "YouTube",
-                    "source_id": video_id
-                }
+            webpage = str(entry.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}")
+            outtmpl = str(dest.with_suffix(".%(ext)s"))
+            for old_file in dest.parent.glob(dest.stem + ".*"):
+                if old_file.is_file():
+                    old_file.unlink(missing_ok=True)
+
+            download_cmd = common + [
+                "--no-playlist", "--max-filesize", "120M",
+                "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
+                "--merge-output-format", "mp4", "-o", outtmpl, "--print-json", webpage
+            ]
+            proc = subprocess.run(download_cmd, capture_output=True, text=True, timeout=240)
+            files = sorted(
+                [p for p in dest.parent.glob(dest.stem + ".*")
+                 if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            clip = next((p for p in files if p.exists() and p.stat().st_size > 100_000), None)
+            if not clip:
+                print(
+                    f"[MEDIA] YouTube candidate {video_id} unavailable: "
+                    f"{proc.stderr[-450:]}",
+                    flush=True
+                )
+                continue
+
+            info = {}
+            for line in reversed(proc.stdout.splitlines()):
+                try:
+                    candidate = json.loads(line)
+                    if candidate.get("id"):
+                        info = candidate
+                        break
+                except Exception:
+                    continue
+            used.add(video_id)
+            return clip, {
+                "file": str(info.get("title") or entry.get("title") or query),
+                "url": str(info.get("webpage_url") or webpage),
+                "license": str(info.get("license") or "YouTube source; license not verified"),
+                "artist": str(info.get("uploader") or entry.get("uploader") or ""),
+                "credit": str(info.get("webpage_url") or webpage),
+                "source": "YouTube",
+                "source_id": video_id
+            }
     except Exception as exc:
-        print(f"[MEDIA] YouTube error: {type(exc).__name__}: {str(exc)[:180]}", flush=True)
+        print(f"[MEDIA] YouTube error for {query}: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
     return None, None
 
 def find_video(query: str, used: set[str], dest: Path):
