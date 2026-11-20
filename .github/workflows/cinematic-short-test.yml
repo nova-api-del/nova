@@ -74,8 +74,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nova-cinematic-test-${{ github.run_number }}
-          path: |
-            output/short_*
-            output/cinematic_*
+          path: output/short_*
           if-no-files-found: warn
           retention-days: 7
