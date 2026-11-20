@@ -64,9 +64,11 @@ jobs:
           m=json.load(open(p))
           assert m["quality_gate"] == "passed"
           assert m["visual_quality_gate"] == "passed"
-          assert m["visual_type"] == "five_distinct_moving_scenes"
+          assert m["visual_type"] == "five_distinct_animated_scenes"
           assert len(m["sources"]) == 5
           assert sum(x.get("kind") != "ai_generated_image_animated" for x in m["sources"]) >= 3
+          assert sum(x.get("kind") not in ("ai_generated_image_animated", "licensed_image_animated") for x in m["sources"]) >= 1
+          assert sum(x.get("kind") == "ai_generated_image_animated" for x in m["sources"]) <= 2
           print("PASS:", m["title"], m["duration_seconds"], "seconds; strict visual gate passed")
           PY
       - name: Upload generated video and diagnostics
