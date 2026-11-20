@@ -21,41 +21,201 @@ W, H, FPS = 1920, 1080, 30
 VOICE = os.getenv("TTS_VOICE", "en-US-GuyNeural")
 UA = "NovaIllustratedStories/1.0 (educational storytelling)"
 TOPIC = {
- "title": "60 Days Alone in the Desert — Can He Survive?",
- "hook": "Imagine waking up in the middle of a vast desert, with no phone, no map, and almost no water.",
+ "title": "I Was Lost in a Blizzard for 3 Nights… Then I Saw Something Outside",
+ "hook": "The storm buried the road, killed my phone, and left me alone in the mountains. On the third night, something walked around my cabin and whispered my name.",
  "scenes": [
-  ("desert sunrise", "A lone young adventurer in a blue headscarf and green jacket wakes beside a tiny backpack in an endless golden desert."),
-  ("empty water bottle", "Close view of the adventurer checking an almost empty water bottle, worried expression, scorching sun."),
-  ("sand dunes", "The adventurer looks across enormous rolling dunes, heat haze shimmering above the sand."),
-  ("footprints", "Fresh footprints trail behind the adventurer and disappear beneath blowing sand."),
-  ("desert rocks", "The adventurer finds a cluster of dark rocks and searches for shade."),
-  ("scorpion tracks", "Small animal tracks cross the sand near a sheltered rock crevice."),
-  ("sunset desert camp", "The adventurer builds a tiny windbreak from stones as the sky turns orange."),
-  ("cold desert night", "The adventurer sits beneath a star-filled desert sky, wrapped in a jacket beside a small safe campfire."),
-  ("distant oasis", "At dawn, the adventurer spots a distant patch of green that might be an oasis."),
-  ("dry riverbed", "The adventurer follows a dry riverbed between weathered canyon walls."),
-  ("desert storm", "A wall of dust approaches across the desert, the adventurer covers their face and seeks shelter."),
-  ("rock shelter", "Inside a shallow rock shelter, the adventurer waits while sand blows past the entrance."),
-  ("rare desert plant", "The adventurer discovers hardy desert plants growing in a shaded crack between rocks."),
-  ("clouds over dunes", "Dark clouds gather above the dunes and the first raindrops hit the sand."),
-  ("rain in desert", "A brief desert shower darkens the ground and leaves small pools between stones."),
-  ("distant road", "The adventurer climbs a ridge and notices a faint vehicle track far away."),
-  ("rescue vehicle", "A distant rescue vehicle approaches along the track as the adventurer waves both arms."),
-  ("sunset hopeful ending", "The exhausted adventurer stands safely beside rescuers, looking back at the immense desert under a warm sunset.")
+  ("blizzard mountain", "A lone young man in a deep blue knit hood and scarf, olive green winter parka and brown backpack struggles through a violent whiteout blizzard in remote mountains."),
+  ("lost in snow", "The same young man stands alone in a vast frozen forest, snow whipping sideways, barely visible pine trees and a fading trail."),
+  ("dead phone", "Close view of the same young man holding a dead mobile phone with a cracked screen, snow covering his gloves, frightened eyes."),
+  ("night blizzard forest", "The same young man follows faint footprints between dark snow covered pine trees at blue twilight, cinematic storybook illustration."),
+  ("remote cabin snow", "A small abandoned wooden cabin appears through dense falling snow, one dark window, the same young man approaching exhausted."),
+  ("cabin interior fireplace", "Inside a rustic isolated cabin, the same young man lights a small fireplace, wet gloves and backpack on the wooden floor."),
+  ("frosted cabin window", "The same young man looks through a frosted window and sees a tall indistinct human shaped shadow among the trees."),
+  ("old radio cabin", "Close view of an old emergency radio crackling on a wooden table as the same young man listens in fear."),
+  ("footprints around cabin", "Fresh human footprints form a perfect circle around the isolated cabin in deep snow, viewed from the doorway."),
+  ("shadow outside window", "A tall dark silhouette stands just beyond the cabin window in blowing snow, the same young man frozen in fear inside."),
+  ("old photograph cabin", "The same young man discovers a faded old photograph showing a man with his exact face standing beside the same cabin decades earlier."),
+  ("burned cabin memory", "A weathered newspaper clipping and old ranger map reveal the cabin burned down years ago, the same young man stares in disbelief."),
+  ("knocking cabin door", "The cabin door trembles under three slow knocks while the same young man backs away, firelight flickering."),
+  ("ranger rescue snow", "At dawn two mountain rescuers find the same young man outside the cabin in deep snow, distant pine forest and pale winter light."),
+  ("snow rescue vehicle", "The same young man sits inside a rescue vehicle looking back at the cabin disappearing in the storm."),
+  ("mysterious package", "At home weeks later, the same young man opens a plain package containing a small memory card and a note on a table."),
+  ("memory card cabin footage", "A laptop screen shows grainy night vision footage of the same snow cabin, a shadow standing behind the camera, the young man watching."),
+  ("final snowy window", "The same young man stands in a dark apartment looking at fresh frost and a human handprint on the outside of the window, chilling cinematic ending.")
  ]
 }
 NARRATION = """
-Imagine waking up in the middle of a vast desert, with no phone, no map, and almost no water.
-That is the beginning of a survival challenge that tests every decision. The first rule is simple: do not panic. Running under the midday sun wastes precious water, so our young explorer stops, checks the supplies, and studies the landscape.
-The bottle is nearly empty. There is no road in sight. The dunes stretch in every direction, and the heat makes distant rocks look like lakes. Walking without a plan could turn a difficult situation into a disaster.
-The explorer searches for shade near a group of rocks. A small shelter can reduce direct sunlight and slow dehydration. The backpack contains a compass, a little food, and a lightweight emergency blanket. There is no magic trick here. Staying calm and protecting energy matter more than heroic gestures.
-As the sun falls, the desert changes. The temperature drops quickly. The explorer makes a small windbreak and prepares for a cold night. Above, the stars are brilliant, but the silence is unsettling. Every sound seems closer than it really is.
-At sunrise, a green patch appears on the horizon. It might be an oasis, or it might be another mirage. The explorer does not rush toward it blindly. Instead, they follow the shape of an old dry riverbed, watching the terrain and conserving strength.
-Then the weather changes. A wall of dust rises in the distance. The explorer covers their face and finds shelter behind a rock formation. The storm arrives with a roar, filling the air with sand. For a while, visibility drops to almost nothing. The safest choice is to stay protected and wait.
-When the wind finally weakens, the explorer continues carefully. A few hardy plants grow in a shaded crack. They are a reminder that life survives here, but they are not a reason to eat unknown plants or take risks.
-Later, clouds gather. Rain begins to fall, briefly transforming the dry ground. The explorer collects a little rainwater in a clean container, then climbs a ridge to look for signs of people. Far away, a faint vehicle track cuts across the sand.
-The explorer waves a bright piece of cloth. Minutes later, a rescue vehicle appears. The challenge is over, but the lesson remains: preparation, patience, and sensible decisions can make the difference in an emergency.
-The desert is beautiful, powerful, and unforgiving. Would you have stayed calm for sixty days? Follow Nova for more survival stories.
+The first thing I learned about being lost in a blizzard is that the snow does not have to bury you to kill you. It only has to make you stop moving. It can erase a road, hide a cliff, silence a phone, and turn a familiar mountain into a place where every direction looks exactly the same.
+
+My name is Daniel. I was driving through the northern mountains when the weather alert came across the radio. Heavy snow. Dangerous visibility. Roads closing. I had planned to reach a small town before dark, so I told myself I had enough time. That was my first mistake.
+
+The snow began as tiny white flecks against the windshield. Ten minutes later, the world outside had disappeared. My headlights illuminated a wall of white. The road markings vanished beneath the snow, and the tires began sliding whenever I touched the brakes. I slowed down, but a fallen branch blocked the road ahead. I tried to turn around. The rear wheels slipped into a ditch, and the engine died.
+
+I called for help. No signal. I tried again. Nothing. The temperature was dropping, and the wind shook the car hard enough to make the mirrors rattle. I had a winter coat, a backpack, a bottle of water, a flashlight, and a little food. The nearest marked shelter was several miles behind me, but I could no longer tell where the road was.
+
+I waited until the worst gusts passed, then wrapped my scarf around my face and stepped outside. The cold hit like a physical blow. Within seconds, snow covered my shoulders and the hood of my coat. I tied a bright strip of fabric to the car mirror, took my backpack, and followed what I thought was the road.
+
+After twenty minutes, I realized I had been walking in a circle. My own footprints had disappeared beneath fresh snow. The trees looked identical. I stopped, forced myself to breathe slowly, and listened. Somewhere ahead, beneath the wind, I heard a faint metallic sound. It might have been a signpost swinging. It might have been a gate. I moved toward it carefully.
+
+Then I saw a shape between the trees. A roof. A small wooden cabin, almost completely buried in snow.
+
+The door was not locked. Inside, the air smelled of old wood, dust, and something faintly smoky. There was a fireplace, a table, two chairs, and an emergency radio with a cracked plastic case. No food. No working lights. But the walls blocked the wind, and that was enough for the moment.
+
+I found a few dry pieces of wood beneath the table and managed to get a small fire going. My hands were shaking so badly that I dropped the matches twice. When the flames finally caught, I sat close to them and watched the shadows move across the walls. I told myself I would wait for daylight, then find a way back to the road.
+
+That was night one.
+
+At around two in the morning, the radio crackled. A voice came through beneath a storm of static. It sounded like a man speaking from far away. I turned the volume up.
+
+'If anyone is inside the cabin, stay away from the windows.'
+
+I leaned closer. The message repeated. Then the voice said something that made my stomach tighten.
+
+'Do not open the door if you hear someone calling your name.'
+
+I waited for more. There was only static.
+
+A few minutes later, three soft knocks came from the front door.
+
+I froze. The knocks were slow and evenly spaced. Not the random tapping of branches. Not the wind. Someone was standing outside.
+
+I moved toward the window, careful not to stand directly in front of it. Through a narrow gap in the frost, I saw a dark figure near the edge of the porch. It was tall, perfectly still, and facing the cabin.
+
+I called out, asking if they needed help. The figure did not move.
+
+Then it spoke.
+
+'Daniel.'
+
+I had not told anyone in the mountains my name. My phone was dead. There was no one else in the cabin. I backed away from the window and turned off the lantern. I stayed beside the fireplace until the first grey light appeared.
+
+When I looked outside again, the figure was gone. But there were footprints in the snow. They began at the tree line, crossed the porch, and stopped directly in front of the door.
+
+There were no footprints leading away.
+
+I spent the second day searching the cabin. I found a small cupboard with a tin of matches, a cracked mug, and an old photograph. The photograph showed a man standing in front of the cabin. He wore a dark coat and held a wooden walking stick. His face was pale, his hair dark, and his eyes looked strangely familiar.
+
+I turned the photograph over. On the back, someone had written a date from twelve years earlier and a single sentence: 'He came back after the storm.'
+
+The man in the picture looked exactly like me.
+
+Not similar. Not a distant resemblance. The same face. The same small scar near the eyebrow. The same uneven smile I saw every morning in the mirror.
+
+I dropped the photograph. It landed face down on the floor.
+
+I searched the rest of the cabin, hoping to find an explanation. Behind a loose board near the fireplace, I discovered a folded newspaper clipping. The headline described a cabin fire in these mountains twelve years earlier. The building had burned to its foundations. A man had disappeared during the storm, and the search had been abandoned after three days.
+
+The article included a photograph of the cabin.
+
+It was this cabin.
+
+I looked around at the walls, the fireplace, the table. Everything was solid. The fire was still burning. I could feel the floor beneath my boots. Yet the newspaper said the building had been destroyed.
+
+Outside, the wind began to rise again.
+
+That evening, the radio turned on by itself. A low hiss filled the room. Then the same voice returned, weaker than before.
+
+'If you can hear me, do not trust the person who comes to rescue you.'
+
+I grabbed the radio and shouted, asking who was speaking. The answer came after a long burst of static.
+
+'You already met him.'
+
+The radio clicked off.
+
+Night two was worse than the first. I pushed the table against the door and placed the chairs beneath the window handles. I kept the flashlight in one hand and the photograph in the other. At midnight, something began walking around the cabin.
+
+Slow steps. Crunch. Pause. Crunch. Pause.
+
+The footsteps circled the walls again and again. Sometimes they stopped outside the window. Sometimes they stood near the chimney. Once, I heard snow sliding from the roof as if someone had climbed onto it.
+
+Then the voice came from the other side of the door.
+
+'Daniel, it's cold out here. Let me in.'
+
+It sounded like my own voice.
+
+I pressed my hands against my ears. The voice repeated the same sentence, but each time it sounded closer, as if the speaker had moved from the porch to the other side of the wood.
+
+Then came a whisper.
+
+'You left me here.'
+
+I did not sleep.
+
+On the third morning, the storm weakened. I could see the slope beyond the trees. I decided to leave as soon as there was enough light to follow the mountain down. I packed the photograph, the radio, and the remaining food. Before opening the door, I looked through the window.
+
+The footprints were back. This time they formed a complete circle around the cabin. In the centre of the circle, directly beneath the window, lay my backpack.
+
+I was holding my backpack.
+
+The one outside looked identical. Same brown fabric. Same torn strap. Same small patch stitched near the top. I opened mine. Inside was the flashlight, the water bottle, and my car keys.
+
+I looked outside again.
+
+The other backpack was gone.
+
+I ran.
+
+I followed the slope downhill, slipping through deep snow and pushing between branches. Twice I fell. Once I heard footsteps behind me, matching my pace. I did not turn around. I kept moving until the trees opened onto a narrow road.
+
+A rescue truck appeared through the snow. Two mountain rangers climbed out and waved me over. One wrapped a blanket around my shoulders. The other asked where I had spent the night.
+
+I told them about the cabin.
+
+They exchanged a look.
+
+There was no cabin in that area, one of them said. The only structure nearby had burned down twelve years ago. The remains were still marked on the old map.
+
+I showed them the photograph.
+
+The younger ranger went pale. He said the man in the picture was his grandfather, one of the volunteers who had searched for the missing driver. The older ranger took the photograph, turned it over, and quietly put it in his coat pocket.
+
+I asked for it back.
+
+He said there was nothing to return. The photograph was blank.
+
+I looked at his hand. The picture was not in it. It was not in his pocket. It had simply vanished.
+
+They drove me to town. At the clinic, doctors treated my hands for frostbite and asked me the same questions again and again. I told them about the radio, the footprints, the voice, and the cabin. They wrote everything down but never mentioned the photograph.
+
+Three weeks later, I received a package at my apartment. No return address. Inside was a small memory card and a note written in block letters.
+
+'You forgot to bring the radio.'
+
+I put the card into my laptop. It contained one video file. The footage was black and white, dated twelve years earlier. It showed the cabin from outside during a blizzard. A man stood on the porch, facing the camera.
+
+It was me.
+
+I watched the figure raise one hand and knock three times. Then the camera moved, as if someone behind it had stepped closer. The man on the porch leaned toward the lens.
+
+His mouth moved.
+
+The audio was almost silent, but I heard the words clearly.
+
+'Do not trust the rescue team.'
+
+The video ended.
+
+I checked the file details. It had been created that morning.
+
+I unplugged the memory card and looked toward my apartment window. A thin layer of frost had formed on the glass, even though the heating was on. Slowly, a handprint appeared on the outside of the window.
+
+Then three knocks sounded from the other side.
+
+I live on the seventh floor.
+
+I have not opened the window. I have not told the police. I keep the lights on, and every night I listen for footsteps in the hallway.
+
+Sometimes, just before dawn, I hear a radio turning on in the next room.
+
+And sometimes, through the static, I hear my own voice saying the same thing.
+
+'If anyone is listening, stay away from the windows.'
+
+If you ever find yourself lost in a blizzard and discover a cabin that seems too welcoming, remember this: shelter can save your life, but not every place that opens its door wants you to leave.
+
+And if something outside calls you by name, do not answer.
 """
 
 def run(cmd):
@@ -166,7 +326,7 @@ def render():
     OUT.mkdir(parents=True,exist_ok=True); scene_dir=OUT/"scenes"; scene_dir.mkdir(exist_ok=True)
     mascot=OUT/"nova_mascot.png"; draw_mascot(mascot)
     audio=asyncio.run(make_voice()); duration=float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","csv=p=0",str(audio)],text=True).strip())
-    if duration<150 or duration>260: raise RuntimeError(f"Story narration must be 2.5–4.3 minutes; got {duration:.1f}s")
+    if duration<450 or duration>700: raise RuntimeError(f"Blizzard narration must be 7.5–11.7 minutes; got {duration:.1f}s")
     per=duration/SCENES; used=set(); rendered=[]; credits=[]; ai_count=0
     for idx,(query,desc) in enumerate(TOPIC["scenes"],1):
       img=scene_dir/f"scene_{idx:02d}.jpg"
@@ -180,8 +340,8 @@ def render():
       # Fit image, apply warm storybook grade, add the same mascot overlay.
       with Image.open(img).convert("RGB") as bg:
         bg=ImageOps.fit(bg,(W,H),method=Image.Resampling.LANCZOS)
-        tint=Image.new("RGB",(W,H),(238,174,100))
-        bg=Image.blend(bg,tint,0.10)
+        tint=Image.new("RGB",(W,H),(92,145,190))
+        bg=Image.blend(bg,tint,0.07)
         bg=bg.filter(ImageFilter.GaussianBlur(0.15))
         bg=bg.convert("RGBA")
         char=Image.open(mascot).convert("RGBA")
