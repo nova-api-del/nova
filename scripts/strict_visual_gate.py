@@ -35,11 +35,11 @@ def inspect_scene(path: Path):
     # tracking shot while rejecting a still image masquerading as footage.
     frozen = run([
         "ffmpeg","-hide_banner","-i",str(path),
-        "-vf","freezedetect=n=-55d=2.0",
+        "-vf","freezedetect=n=-55dB:d=2",
         "-an","-f","null","-"
     ])
     if frozen.returncode != 0:
-        raise RuntimeError(f"{path.name}: ffmpeg freezedetect failed")
+        raise RuntimeError(f"{path.name}: ffmpeg freezedetect failed: {frozen.stderr[-800:]}")
     freeze_time = 0.0
     for line in frozen.stderr.splitlines():
         match = re.search(r"freeze_duration:([0-9.]+)", line)
