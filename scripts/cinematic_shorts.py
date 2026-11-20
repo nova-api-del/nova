@@ -320,9 +320,11 @@ def generate_ai_image(query: str, dest: Path):
             headers={"Authorization": f"Bearer {key}", "User-Agent": UA},
             timeout=180)
         response.raise_for_status()
-        if not response.headers.get("content-type", "").startswith("image/") or len(response.content) < 30_000:
+        content_type = response.headers.get("content-type", "").split(";")[0].lower()
+        ext = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" }.get(content_type)
+        if not ext or len(response.content) < 30_000:
             return None, None
-        dest = dest.with_suffix(".jpg")
+        dest = dest.with_suffix(ext)
         dest.write_bytes(response.content)
         return dest, {"file": f"AI-generated scene: {query}", "url": "https://gen.pollinations.ai/",
             "license": "AI-generated; provider/model terms apply", "artist": "Nova AI generation",
