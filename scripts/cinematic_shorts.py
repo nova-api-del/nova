@@ -314,6 +314,24 @@ def youtube_video(query: str, used: set[str], dest: Path):
 
     common = [ytdlp, "--no-warnings", "--ignore-errors", "--no-progress",
               "--js-runtimes", "node", "--remote-components", "ejs:github"]
+    # GitHub Actions injects the secret as an environment variable; never commit cookies.
+    cookies_text = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if cookies_text:
+        import atexit, tempfile
+        cookie_file = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="nova-youtube-", suffix=".txt", delete=False)
+        try:
+            cookie_file.write(cookies_text)
+            cookie_file.close()
+            os.chmod(cookie_file.name, 0o600)
+            common += ["--cookies", cookie_file.name]
+            atexit.register(lambda p=cookie_file.name: Path(p).unlink(missing_ok=True))
+            print("[MEDIA] YouTube session cookies loaded from GitHub Secret", flush=True)
+        except Exception:
+            cookie_file.close()
+            Path(cookie_file.name).unlink(missing_ok=True)
+            raise
+    else:
+        print("[MEDIA] YOUTUBE_COOKIES secret is not configured; trying anonymous YouTube access", flush=True)
     try:
         search_cmd = common + ["--flat-playlist", "--dump-single-json", f"ytsearch15:{query}"]
         search_proc = subprocess.run(search_cmd, capture_output=True, text=True, timeout=120)
