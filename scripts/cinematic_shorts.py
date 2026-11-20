@@ -203,7 +203,10 @@ def nasa_video(query: str, used: set[str], dest: Path):
     # Keep discovery bounded: exact phrase plus two compact variants.
     # Relevance filtering below rejects unrelated results without dozens of API calls.
     words = query.lower().split()
-    terms = list(dict.fromkeys(t for t in [query, " ".join(words[:3]), " ".join(words[-2:])] if t))
+    terms = [query, " ".join(words[:3]), " ".join(words[-2:])]
+    if "supervolcano" in query.lower():
+        terms.append("volcano")
+    terms = list(dict.fromkeys(t for t in terms if t))
     seen = set()
     for term in terms:
         try:
