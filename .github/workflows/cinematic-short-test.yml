@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/cinematic_shorts.py'
+      - 'scripts/strict_visual_gate.py'
       - '.github/workflows/cinematic-short-test.yml'
   workflow_dispatch:
     inputs:
@@ -16,7 +17,7 @@ permissions:
 jobs:
   cinematic-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,10 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
-            echo "FFmpeg and ffprobe already available:"
             ffmpeg -version | head -n 1
           else
-            echo "FFmpeg missing; installing with bounded retries/timeouts."
             sudo timeout 180s apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
             sudo timeout 180s apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
           fi
@@ -42,7 +41,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --upgrade pip
           pip install --disable-pip-version-check -r requirements-shorts.txt
-      - name: Generate cinematic Short (multi-source with optional AI fallback)
+      - name: Generate cinematic Short
         timeout-minutes: 15
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -50,6 +49,9 @@ jobs:
           POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
           POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
         run: python scripts/cinematic_shorts.py --slot "${{ inputs.slot || '0' }}"
+      - name: Strict visual quality gate
+        timeout-minutes: 5
+        run: python scripts/strict_visual_gate.py
       - name: Validate deliverable metadata
         run: |
           python - <<'PY'
@@ -57,10 +59,11 @@ jobs:
           p=glob.glob("output/short_*.json")[0]
           m=json.load(open(p))
           assert m["quality_gate"] == "passed"
+          assert m["visual_quality_gate"] == "passed"
           assert m["visual_type"] == "five_distinct_moving_scenes"
           assert len(m["sources"]) == 5
           assert sum(x.get("kind") != "ai_generated_image_animated" for x in m["sources"]) >= 3
-          print("PASS:", m["title"], m["duration_seconds"], "seconds; five unique video sources")
+          print("PASS:", m["title"], m["duration_seconds"], "seconds; strict visual gate passed")
           PY
       - uses: actions/upload-artifact@v4
         with:
