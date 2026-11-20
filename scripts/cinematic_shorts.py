@@ -192,8 +192,16 @@ def _topic_tokens(text: str) -> set[str]:
 
 def _relevant_result(query: str, title: str, description: str) -> bool:
     wanted = _topic_tokens(query)
-    title_hits = len(wanted & _topic_tokens(title))
-    total_hits = len(wanted & _topic_tokens(title + " " + description))
+    # Science-footage synonyms: an eruption clip is often indexed without the
+    # phrase "volcanic ash", even when its description documents the ash plume.
+    if "ash" in wanted:
+        wanted.update({"volcan", "erupt", "plume", "ashfal"})
+    if "volcan" in wanted or "superv" in wanted:
+        wanted.update({"volcan", "erupt", "lava", "magma"})
+    title_tokens = _topic_tokens(title)
+    all_tokens = _topic_tokens(title + " " + description)
+    title_hits = len(wanted & title_tokens)
+    total_hits = len(wanted & all_tokens)
     return total_hits >= 2 and (title_hits >= 1 or total_hits >= 3)
 
 def nasa_video(query: str, used: set[str], dest: Path):
