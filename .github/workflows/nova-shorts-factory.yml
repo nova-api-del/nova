@@ -57,6 +57,18 @@ jobs:
           for i in $(seq 0 $((COUNT-1))); do
             python scripts/cinematic_shorts.py --slot "$i"
           done
+      - name: Verify synchronized karaoke captions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          files = sorted(Path('output').glob('voice_*.ass'))
+          assert files, 'No generated subtitle files found'
+          for path in files:
+              data = path.read_text(encoding='utf-8')
+              assert r'\\kf' in data, f'No word-synchronized karaoke timings in {path}'
+              assert r'\\pos(540,1400)' in data, f'Captions are not centered in lower-middle safe area: {path}'
+          print(f'PASS: {len(files)} synchronized TikTok-style caption track(s)')
+          PY
       - name: Run strict visual quality gate
         run: python scripts/strict_visual_gate.py
       - name: Enforce footage quality gate
