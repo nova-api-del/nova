@@ -223,8 +223,8 @@ def nasa_video(query: str, used: set[str], dest: Path):
     seen = set()
     for term in terms:
         try:
-            response = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 30},
-                                    headers=headers, timeout=30)
+            response = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 20},
+                                    headers=headers, timeout=20)
             response.raise_for_status()
             payload = response.json()
             items = (payload.get("collection") or {}).get("items") or []
@@ -232,7 +232,7 @@ def nasa_video(query: str, used: set[str], dest: Path):
         except Exception as exc:
             print(f"[MEDIA] NASA query={term!r} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
             continue
-        for item in items:
+        for item in items[:15]:
             data = (item.get("data") or [{}])[0]
             nasa_id = data.get("nasa_id")
             if not nasa_id or nasa_id in used or nasa_id in seen:
@@ -274,11 +274,11 @@ def commons_video(query: str, used: set[str], dest: Path):
       for term in search_terms:
         try:
             params = {"action":"query", "format":"json", "list":"search", "srnamespace":6,
-                      "srlimit":15, "srsearch":f"{term} {mime_query}"}
-            data = requests.get(api, params=params, headers=headers, timeout=30).json()
+                      "srlimit":10, "srsearch":f"{term} {mime_query}"}
+            data = requests.get(api, params=params, headers=headers, timeout=15).json()
             pages = (data.get("query") or {}).get("search") or []
             print(f"[MEDIA] Wikimedia query={term!r} {mime_query} results={len(pages)}", flush=True)
-            for result in pages:
+            for result in pages[:8]:
                 title = result.get("title", "")
                 detail = requests.get(api, params={"action":"query","format":"json","titles":title,
                     "prop":"imageinfo","iiprop":"url|mime|size|extmetadata"}, headers=headers, timeout=30).json()
@@ -379,15 +379,15 @@ def archive_video(query: str, used: set[str], dest: Path):
         for term in terms:
             data = requests.get("https://archive.org/advancedsearch.php",
                 params={"q": f'({term}) AND mediatype:movies',
-                        "fl[]": ["identifier", "title"], "rows": 15, "page": 1, "output": "json"},
-                headers={"User-Agent": UA}, timeout=30)
+                        "fl[]": ["identifier", "title"], "rows": 10, "page": 1, "output": "json"},
+                headers={"User-Agent": UA}, timeout=18)
             data.raise_for_status()
             found = data.json().get("response", {}).get("docs", [])
             print(f"[MEDIA] Internet Archive query={term!r} results={len(found)}", flush=True)
             docs.extend(found)
-            if len(docs) >= 15:
+            if len(docs) >= 10:
                 break
-        for item in docs:
+        for item in docs[:8]:
             ident = item.get("identifier")
             if not ident or ident in used:
                 continue
@@ -453,11 +453,11 @@ def nasa_image(query: str, used: set[str], dest: Path):
     """NASA public image library fallback; each image is attributed and animated in the edit."""
     try:
         data = requests.get("https://images-api.nasa.gov/search",
-            params={"q": query, "media_type": "image", "page_size": 25},
-            headers={"User-Agent": UA}, timeout=30)
+            params={"q": query, "media_type": "image", "page_size": 12},
+            headers={"User-Agent": UA}, timeout=15)
         data.raise_for_status()
         items = (data.json().get("collection") or {}).get("items") or []
-        for item in items:
+        for item in items[:8]:
             meta = (item.get("data") or [{}])[0]
             ident = meta.get("nasa_id")
             title = str(meta.get("title", ""))
@@ -465,7 +465,7 @@ def nasa_image(query: str, used: set[str], dest: Path):
             if not ident or ident in used or not _relevant_result(query, title, desc):
                 continue
             manifest = requests.get(f"https://images-api.nasa.gov/asset/{ident}",
-                headers={"User-Agent": UA}, timeout=25)
+                headers={"User-Agent": UA}, timeout=15)
             manifest.raise_for_status()
             assets = (manifest.json().get("collection") or {}).get("items") or []
             urls = [x.get("href", "") for x in assets]
@@ -488,11 +488,11 @@ def commons_image(query: str, used: set[str], dest: Path):
     for term in terms:
         try:
             search = requests.get(api, params={"action":"query","format":"json","list":"search",
-                "srnamespace":6,"srlimit":20,"srsearch":f"{term} filemime:image/jpeg"},
-                headers={"User-Agent": UA}, timeout=25)
+                "srnamespace":6,"srlimit":10,"srsearch":f"{term} filemime:image/jpeg"},
+                headers={"User-Agent": UA}, timeout=15)
             search.raise_for_status()
             results = (search.json().get("query") or {}).get("search") or []
-            for result in results:
+            for result in results[:8]:
                 title = result.get("title", "")
                 if not title or title in used:
                     continue
