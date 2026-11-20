@@ -166,6 +166,24 @@ def nasa_video(query: str, used: set[str], dest: Path):
             nasa_id = data.get("nasa_id")
             if not nasa_id or nasa_id in used or nasa_id in seen:
                 continue
+            # Reject loosely related NASA search hits before downloading. Require
+            # at least one core query term in the title and two in title+description.
+            title = str(data.get("title", ""))
+            description = str(data.get("description", ""))
+            stop = {"the","and","for","with","from","into","above","below","after","before","about","that","this"}
+            query_tokens = [w.lower() for w in re.findall(r"[a-z]{4,}", query) if w.lower() not in stop]
+            def roots(text):
+                found=set()
+                for token in re.findall(r"[a-z]{4,}", text.lower()):
+                    found.add(token[:5] if len(token)>5 else token)
+                return found
+            title_roots = roots(title)
+            all_roots = roots(title + " " + description)
+            wanted = {w[:5] if len(w)>5 else w for w in query_tokens}
+            title_hits = len(wanted & title_roots)
+            total_hits = len(wanted & all_roots)
+            if title_hits < 1 or total_hits < 2:
+                continue
             seen.add(nasa_id)
             try:
                 manifest = requests.get(f"https://images-api.nasa.gov/asset/{nasa_id}",
