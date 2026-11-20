@@ -24,7 +24,8 @@ IMAGE_URLS = [
  "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/e1f3b0ab-2e57-4c14-8b61-b58f8c76464d/ccec0269-5e0e-4e6a-baa2-3aa07c2cac56/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiNmVlYTA5NzExMTRmN2EyYiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTM0MDQwMX0.zvZll7WO6ivjdZa1DcstxkbDKGUXuiuB-NygR6lPfqc",
  "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/9840220c-561d-4195-821f-ad575724308a/b35269d4-485f-4039-aecf-44dec3dd903e/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMzU2ZjRkOTFiNzA4MmNmOCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTMwNjAwMX0.sCUi2LjsmLRJr1TS8lzNRQuDxIPBYs1b7swtV1DKOWk",
  "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/b1b9dd5e-0062-4aab-a9a0-38566133beb0/940e1323-8842-4820-ba27-c91909d9fc79/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZTI0NDg1ZTJhNmQwMTQzZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTM3NjczOH0.gN697rWUUTNfVyEMlYwPrUZvQqQogi6BAuYwfDHfrgU",
- "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/1c0baf59-8d21-4b4c-8a12-9dbc06b35812/65986a8f-e17b-4419-a58b-84c0b774b0b1/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZjdlOGZmMDdhYWU3NWM3MiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTMzNzk5MX0.Gqzoh6a6y8VwEDbDlmRlkszTHo7LbzVTA3oEb5G_2xQ"
+ "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/1c0baf59-8d21-4b4c-8a12-9dbc06b35812/65986a8f-e17b-4419-a58b-84c0b774b0b1/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZjdlOGZmMDdhYWU3NWM3MiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTMzNzk5MX0.Gqzoh6a6y8VwEDbDlmRlkszTHo7LbzVTA3oEb5G_2xQ",
+ "https://dnznrvs05pmza.cloudfront.net/gemini/gemini-nano-banana-2.1/images/aea9c7b7-e945-4e31-99a9-8cbe1e177dd8/d4c009f5-5c8e-4218-911c-488370cff8ec/Use__hero_as_the_exact_recurring_character_design_reference_.png?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiY2FhMTRjOTNiMTIwMjdjNSIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5NTM3OTczMX0.35WUBuJai--NUgTJH9L8E35v46ZGT-qThm2ECZWD97c"
 ]
 NARRATION = """Imagine waking up in the middle of a desert with no phone signal, no road, and almost no water. The sun is rising, the sand stretches in every direction, and the only sound is the wind. This is the beginning of one man's fight to survive.
 
@@ -109,8 +110,8 @@ def main():
     audio=ASSETS/"narration.wav"
     if not audio.exists():
         print("Downloading narration",flush=True); fetch(AUDIO_URL,audio)
-    # Eleven unique illustrations plus a final reprise of the same single hero at the oasis.
-    sequence=images+[images[-1]]
+    # Twelve unique illustrations, each featuring the same single recurring hero.
+    sequence=images
     clip_duration=TOTAL/len(sequence)
     clips=[]
     for i,img in enumerate(sequence):
