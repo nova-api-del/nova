@@ -30,6 +30,13 @@ TOPICS = [
             "These eruptions are extremely rare, and scientists monitor volcanic systems for signs of change.",
             "The real story is not a prediction of doom, but how closely Earth scientists watch our restless planet."
         ],
+        "details": [
+            "Even a large eruption would affect regions differently, depending on wind and weather.",
+            "Fine ash can damage aircraft engines and make roads and water supplies unsafe.",
+            "Cooling would depend on how much sulfur reaches the stratosphere and how long it remains.",
+            "Monitoring includes earthquakes, ground deformation, gas emissions, and changes in heat.",
+            "Past eruptions help researchers understand risk, but they cannot predict an exact date."
+        ],
         "queries": ["supervolcano volcanic caldera eruption", "volcanic ash plume eruption aerial", "volcanic ash falling landscape", "volcano monitoring scientists seismology", "lava flowing volcano landscape"]
     },
     {
@@ -41,6 +48,13 @@ TOPICS = [
             "Deep sea trenches can plunge almost eleven kilometers below the ocean surface.",
             "Robotic submersibles let researchers explore places that would be impossible for divers to reach.",
             "Every expedition can reveal unfamiliar species and surprising ways life survives."
+        ],
+        "details": [
+            "Sunlight fades quickly with depth, leaving ecosystems adapted to darkness.",
+            "Some glowing animals use light to attract prey, confuse predators, or communicate.",
+            "At the deepest points, pressure is more than a thousand times surface pressure.",
+            "ROVs carry cameras, lights, and instruments into places humans cannot safely visit.",
+            "New observations help scientists map habitats and understand deep ocean food webs."
         ],
         "queries": ["deep sea ocean ROV underwater exploration", "bioluminescent deep sea animals", "ocean trench underwater deep sea", "research submarine remotely operated vehicle", "deep sea fish underwater"]
     },
@@ -54,6 +68,13 @@ TOPICS = [
             "Tardigrades can enter a dormant state that helps them survive extreme conditions.",
             "Evolution has produced survival strategies more surprising than science fiction."
         ],
+        "details": [
+            "The octopus has no rigid skeleton, so most of its body can squeeze through.",
+            "Those tiny toe structures create close contact with surfaces without ordinary glue.",
+            "Birds combine magnetic cues with landmarks, the Sun, and other navigation signals.",
+            "During dormancy, tardigrades lose most of their body water and slow metabolism.",
+            "These adaptations evolved over immense timescales through natural selection."
+        ],
         "queries": ["octopus underwater swimming closeup", "gecko climbing glass macro", "migratory birds flock flying", "tardigrade microscope water bear", "wildlife animal nature macro"]
     },
     {
@@ -65,6 +86,13 @@ TOPICS = [
             "Lightning heats the surrounding air to temperatures hotter than the Sun's visible surface.",
             "Dust storms can carry particles across entire oceans and continents.",
             "The atmosphere is an enormous physics laboratory, and we are still learning its behavior."
+        ],
+        "details": [
+            "They can last only milliseconds, making high-speed cameras essential for research.",
+            "The pouch shapes form in sinking air beneath certain cloud layers.",
+            "The rapid heating makes air expand explosively, creating the sound of thunder.",
+            "Strong winds can lift dust high enough to travel thousands of kilometers.",
+            "Satellites and weather radar reveal patterns that ground observers cannot see."
         ],
         "queries": ["red sprites lightning upper atmosphere", "mammatus clouds storm sky", "lightning thunderstorm dramatic", "dust storm desert aerial", "supercell thunderstorm clouds"]
     },
@@ -78,6 +106,13 @@ TOPICS = [
             "The deepest ocean trenches descend farther below sea level than Everest rises above it.",
             "These extreme environments help scientists understand the limits of life."
         ],
+        "details": [
+            "Polar deserts receive very little snowfall despite their enormous frozen landscapes.",
+            "Some areas receive less than a few millimeters of rain in a year.",
+            "These hidden lakes may preserve unusual microbial ecosystems beneath the ice.",
+            "Ocean trenches form where one tectonic plate sinks beneath another.",
+            "Studying extreme habitats helps researchers search for life beyond Earth."
+        ],
         "queries": ["Antarctica aerial ice desert", "Atacama desert landscape Chile", "Antarctic ice drilling research", "ocean deep sea trench submersible", "extreme landscape Earth mountains ice"]
     },
     {
@@ -89,6 +124,13 @@ TOPICS = [
             "Light from the Sun takes about eight minutes to reach Earth.",
             "Some planets orbit two stars, creating sunsets unlike anything on Earth.",
             "The more we explore space, the more extraordinary the universe becomes."
+        ],
+        "details": [
+            "Venus takes about 243 Earth days to rotate once on its axis.",
+            "A teaspoon of neutron star material would have an extraordinary mass on Earth.",
+            "That sunlight is already eight minutes old when it reaches our planet.",
+            "These worlds are called circumbinary planets because they orbit both stars.",
+            "New telescopes are revealing planets and systems once beyond our reach."
         ],
         "queries": ["Venus planet space NASA", "neutron star space illustration observatory", "Sun solar flare NASA", "binary star exoplanet astronomy", "galaxy stars telescope deep space"]
     }
@@ -447,12 +489,12 @@ def build(slot: int):
     topic = TOPICS[slot % len(TOPICS)]
     work = OUT / f"cinematic_{datetime.now(timezone.utc):%Y%m%d}_{slot+1}"
     work.mkdir(parents=True, exist_ok=True)
-    narration = topic["hook"] + " " + " ".join(topic["facts"]) + " Follow Nova for more discoveries."
+    narration = topic["hook"] + " " + " ".join(f"{fact} {detail}" for fact, detail in zip(topic["facts"], topic["details"])) + " Follow Nova for more discoveries."
     voice = work / "voice.mp3"
     asyncio.run(make_voice(narration, voice))
     duration = probe_duration(voice)
-    if not 24 <= duration <= 58:
-        raise RuntimeError(f"Voiceover duration outside target: {duration:.1f}s")
+    if not 45 <= duration <= 62:
+        raise RuntimeError(f"Voiceover duration outside 45-62 second target: {duration:.1f}s")
     srt = work / "captions.srt"
     make_srt(narration, duration, srt)
     used, sources, scenes = set(), [], []
