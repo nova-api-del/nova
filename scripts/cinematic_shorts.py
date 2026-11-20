@@ -127,15 +127,33 @@ def nasa_video(query: str, used: set[str], dest: Path):
     """Search NASA's public video library and resolve real MP4/MOV files via asset manifests."""
     search_api = "https://images-api.nasa.gov/search"
     headers = {"User-Agent": UA}
-    # Shorter variants improve recall when the full descriptive phrase is not indexed.
-    terms = [query, " ".join(query.split()[:3]), " ".join(query.split()[-2:])]
+    # Search broad, likely-to-be-indexed concepts after the exact editorial phrase.
+    words = query.lower().split()
+    terms = [query, " ".join(words[:3]), " ".join(words[-2:])]
+    topic_words = {
+        "supervolcano": ["volcano", "volcanic eruption", "lava", "geology"],
+        "volcano": ["volcanic eruption", "lava", "volcanic"],
+        "ocean": ["underwater", "deep sea", "ocean"],
+        "earthquake": ["earthquake", "seismic", "tectonic"],
+        "storm": ["hurricane", "tornado", "lightning"],
+        "space": ["rocket launch", "spacecraft", "planet"],
+        "animal": ["wildlife", "animal"],
+    }
+    for key, variants in topic_words.items():
+        if key in query.lower():
+            terms.extend(variants)
+    terms = list(dict.fromkeys(t for t in terms if t))
     seen = set()
     for term in terms:
         try:
-            payload = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 30},
-                                   headers=headers, timeout=30).json()
+            response = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 50},
+                                    headers=headers, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
             items = (payload.get("collection") or {}).get("items") or []
-        except Exception:
+            print(f"[MEDIA] NASA query={term!r} results={len(items)}", flush=True)
+        except Exception as exc:
+            print(f"[MEDIA] NASA query={term!r} error={type(exc).__name__}: {str(exc)[:160]}", flush=True)
             continue
         for item in items:
             data = (item.get("data") or [{}])[0]
@@ -167,13 +185,16 @@ def commons_video(query: str, used: set[str], dest: Path):
     """Wikimedia fallback using the supported list=search + filemime query."""
     api = "https://commons.wikimedia.org/w/api.php"
     headers = {"User-Agent": UA}
+    words = query.lower().split()
+    search_terms = list(dict.fromkeys([query, " ".join(words[:3]), words[0] if words else query]))
     for mime_query, ext in [("filemime:video/webm", ".webm"), ("filemime:video/mp4", ".mp4")]:
+      for term in search_terms:
         try:
             params = {"action":"query", "format":"json", "list":"search", "srnamespace":6,
-                      "srlimit":30, "srsearch":f"{query} {mime_query}",
-                      "prop":"imageinfo", "iiprop":"url|mime|size|extmetadata"}
+                      "srlimit":40, "srsearch":f"{term} {mime_query}"}
             data = requests.get(api, params=params, headers=headers, timeout=30).json()
             pages = (data.get("query") or {}).get("search") or []
+            print(f"[MEDIA] Wikimedia query={term!r} {mime_query} results={len(pages)}", flush=True)
             for result in pages:
                 title = result.get("title", "")
                 detail = requests.get(api, params={"action":"query","format":"json","titles":title,
@@ -268,11 +289,21 @@ def pexels_video(query: str, used: set[str], dest: Path):
 def archive_video(query: str, used: set[str], dest: Path):
     """Internet Archive fallback, accepting only clearly reusable CC/PD items."""
     try:
-        data = requests.get("https://archive.org/advancedsearch.php",
-            params={"q": f'({query}) AND mediatype:movies',
-                    "fl[]": ["identifier", "title"], "rows": 25, "page": 1, "output": "json"},
-            headers={"User-Agent": UA}, timeout=30).json()
-        docs = data.get("response", {}).get("docs", [])
+        # The complete editorial phrase is often too restrictive for Archive metadata.
+        words = query.lower().split()
+        terms = list(dict.fromkeys([query, " ".join(words[:2]), words[0] if words else query]))
+        docs = []
+        for term in terms:
+            data = requests.get("https://archive.org/advancedsearch.php",
+                params={"q": f'({term}) AND mediatype:movies',
+                        "fl[]": ["identifier", "title"], "rows": 40, "page": 1, "output": "json"},
+                headers={"User-Agent": UA}, timeout=30)
+            data.raise_for_status()
+            found = data.json().get("response", {}).get("docs", [])
+            print(f"[MEDIA] Internet Archive query={term!r} results={len(found)}", flush=True)
+            docs.extend(found)
+            if len(docs) >= 40:
+                break
         for item in docs:
             ident = item.get("identifier")
             if not ident or ident in used:
