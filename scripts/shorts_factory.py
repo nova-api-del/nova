@@ -81,17 +81,37 @@ def commons_video(query,work):
     except Exception: pass
     return None
 async def tts(text,path): await edge_tts.Communicate(text,VOICE,rate="-5%").save(str(path))
+def make_captions(text,duration,path):
+    words=text.split(); chunks=[]; current=[]
+    for word in words:
+        current.append(word)
+        if len(current)>=7 or len(' '.join(current))>=42:
+            chunks.append(' '.join(current)); current=[]
+    if current: chunks.append(' '.join(current))
+    weights=[max(1,len(x)) for x in chunks]; total=sum(weights); cursor=0.0; rows=[]
+    for chunk,weight in zip(chunks,weights):
+        span=duration*weight/total; rows.append((cursor,min(duration,cursor+span),chunk)); cursor+=span
+    def stamp(sec):
+        ms=int(round(sec*1000)); h,ms=divmod(ms,3600000); m,ms=divmod(ms,60000); sec,ms=divmod(ms,1000)
+        return f'{h:02d}:{m:02d}:{sec:02d},{ms:03d}'
+    path.write_text('\\n\\n'.join(f'{i}\\n{stamp(a)} --> {stamp(b)}\\n{t}' for i,(a,b,t) in enumerate(rows,1)),encoding='utf-8')
+    return path
+
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--slot",type=int,default=0); args=ap.parse_args()
-    title,search=TOPICS[args.slot%len(TOPICS)]; facts=FACTS[title]
-    day=datetime.now(timezone.utc).strftime("%Y%m%d"); work=OUT/f"job_{day}_{args.slot}"; work.mkdir(parents=True,exist_ok=True)
+    day=datetime.now(timezone.utc).strftime("%Y%m%d")
+    topic_index=(datetime.now(timezone.utc).date().toordinal()*6+args.slot)%len(TOPICS)
+    title,search=TOPICS[topic_index]; facts=FACTS[title]
+    work=OUT/f"job_{day}_{args.slot}"; work.mkdir(parents=True,exist_ok=True)
     narration="Here is something most people never realize. "+" ".join(facts)+" Follow Nova for more discoveries."
     audio=work/"voice.mp3"; asyncio.run(tts(narration,audio))
     dur=float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(audio)]))
+    captions=make_captions(narration,dur,work/"captions.srt")
+    subtitle_filter=f"subtitles=filename={captions.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Shadow=1,Alignment=2,MarginV=220'"
     clip=commons_video(search,work)
     if clip:
         video=work/"video.mp4"
-        run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-i",str(audio),"-t",str(max(1,dur)),"-map","0:v:0","-map","1:a:0","-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
+        run(["ffmpeg","-y","-stream_loop","-1","-i",str(clip),"-i",str(audio),"-t",str(max(1,dur)),"-map","0:v:0","-map","1:a:0","-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p,{subtitle_filter}","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
     else:
         imgs=[]; each=max(4.5,dur/len(facts))
         for i,f in enumerate(facts):
@@ -101,8 +121,8 @@ def main():
         lines.append(f"file '{imgs[-1]}'"); concat.write_text("\n".join(lines))
         video=work/"video.mp4"
         frames_per_scene=max(1,round(each*30))
-        run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),"-map","0:v:0","-map","1:a:0","-vf",f"zoompan=z='min(zoom+0.0008,1.12)':d={frames_per_scene}:s=1080x1920:fps=30,format=yuv420p","-t",str(dur),"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
-    meta={"title":title+" #"+str(args.slot+1),"description":"A fast science and nature discovery. Follow Nova for more. #shorts #facts #science #education","date_utc":datetime.now(timezone.utc).isoformat(),"topic":title,"slot":args.slot,"duration_seconds":round(dur,1)}
+        run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),"-map","0:v:0","-map","1:a:0","-vf",f"zoompan=z='min(zoom+0.0008,1.12)':d={frames_per_scene}:s=1080x1920:fps=30,format=yuv420p,{subtitle_filter}","-t",str(dur),"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
+    meta={"title":title+" #"+str(args.slot+1),"description":"A fast science and nature discovery. Follow Nova for more. #shorts #facts #science #education","date_utc":datetime.now(timezone.utc).isoformat(),"topic":title,"slot":args.slot,"duration_seconds":round(dur,1),"captions":"burned-in"}
     actual=float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(video)]))
     if actual < min(10.0,dur*0.8):
         raise RuntimeError(f"Rendered video is too short: {actual:.2f}s (voiceover {dur:.2f}s)")
