@@ -30,7 +30,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-shorts.txt
-      - name: Generate cinematic Short (fails closed if footage is missing)
+      - name: Generate cinematic Short (multi-source with optional AI fallback)
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
         run: python scripts/cinematic_shorts.py --slot "${{ inputs.slot || '0' }}"
       - name: Validate deliverable metadata
         run: |
@@ -39,8 +44,9 @@ jobs:
           p=glob.glob("output/short_*.json")[0]
           m=json.load(open(p))
           assert m["quality_gate"] == "passed"
-          assert m["visual_type"] == "five_distinct_moving_video_clips"
-          assert len({x["url"] for x in m["sources"]}) == 5
+          assert m["visual_type"] == "five_distinct_moving_scenes"
+          assert len(m["sources"]) == 5
+          assert sum(x.get("kind") != "ai_generated_image_animated" for x in m["sources"]) >= 3
           print("PASS:", m["title"], m["duration_seconds"], "seconds; five unique video sources")
           PY
       - uses: actions/upload-artifact@v4
