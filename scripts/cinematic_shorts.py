@@ -338,9 +338,13 @@ def find_video(query: str, used: set[str], dest: Path):
     """Try several independent free libraries before optional AI imagery."""
     providers = (nasa_video, pixabay_video, pexels_video, archive_video, commons_video)
     for provider in providers:
-        clip, attribution = provider(query, used, dest)
-        if clip:
-            return clip, attribution
+        try:
+            clip, attribution = provider(query, used, dest)
+            print(f"[MEDIA] {provider.__name__}: {'FOUND' if clip else 'no match'} for {query}", flush=True)
+            if clip:
+                return clip, attribution
+        except Exception as exc:
+            print(f"[MEDIA] {provider.__name__}: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
     return None, None
 
 async def make_voice(text: str, path: Path):
