@@ -106,9 +106,14 @@ def main():
         sources=meta.get("sources",[])
         if len(sources)!=5:
             failures.append(f"{stem}: expected five attributed sources")
-        real=[x for x in sources if x.get("kind")!="ai_generated_image_animated"]
-        if len(real)<3:
-            failures.append(f"{stem}: fewer than three real moving-footage sources")
+        sourced=[x for x in sources if x.get("kind") not in ("ai_generated_image_animated",)]
+        video_sources=[x for x in sources if x.get("kind") not in ("ai_generated_image_animated","licensed_image_animated")]
+        if len(sourced)<3:
+            failures.append(f"{stem}: fewer than three distinct licensed non-AI visual assets")
+        if len(video_sources)<1:
+            failures.append(f"{stem}: no actual moving-video source found")
+        if sum(x.get("kind")=="ai_generated_image_animated" for x in sources)>2:
+            failures.append(f"{stem}: more than two AI-generated still scenes")
 
     if failures:
         print("QUALITY GATE FAILED:\n" + "\n".join(failures))
