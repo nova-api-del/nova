@@ -9,7 +9,7 @@ on:
       episode:
         description: "Story episode preset"
         required: false
-        default: "desert-survival"
+        default: "blizzard-three-nights"
 jobs:
   build-story:
     runs-on: ubuntu-latest
@@ -45,7 +45,7 @@ jobs:
           import json
           from pathlib import Path
           m=json.loads(Path('output/story_episode/metadata.json').read_text())
-          assert 150 <= m['duration_seconds'] <= 260, m
+          assert 450 <= m['duration_seconds'] <= 700, m
           assert m['scenes'] == 18, m
           assert Path('output/story_episode/nova_story_episode.mp4').stat().st_size > 2_000_000
           print('PASS: narrated story episode, 18 scenes, subtitles and audio')
