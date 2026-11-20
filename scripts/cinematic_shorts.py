@@ -171,6 +171,27 @@ def _download_verified(url: str, dest: Path):
         dest.unlink(missing_ok=True)
         return None
 
+def _topic_tokens(text: str) -> set[str]:
+    """Normalize topic words without conflating unrelated words like landscape/landslide."""
+    tokens = set()
+    for word in re.findall(r"[a-z]{3,}", str(text).lower()):
+        if word.endswith("ing") and len(word) > 5:
+            word = word[:-3]
+        elif word.endswith("ies") and len(word) > 5:
+            word = word[:-3] + "y"
+        elif word.endswith("es") and len(word) > 5:
+            word = word[:-2]
+        elif word.endswith("s") and len(word) > 4:
+            word = word[:-1]
+        tokens.add(word[:6] if len(word) > 6 else word)
+    return tokens
+
+def _relevant_result(query: str, title: str, description: str) -> bool:
+    wanted = _topic_tokens(query)
+    title_hits = len(wanted & _topic_tokens(title))
+    total_hits = len(wanted & _topic_tokens(title + " " + description))
+    return total_hits >= 2 and (title_hits >= 1 or total_hits >= 3)
+
 def nasa_video(query: str, used: set[str], dest: Path):
     """Search NASA's public video library and resolve real MP4/MOV files via asset manifests."""
     search_api = "https://images-api.nasa.gov/search"
@@ -200,19 +221,7 @@ def nasa_video(query: str, used: set[str], dest: Path):
             # at least one core query term in the title and two in title+description.
             title = str(data.get("title", ""))
             description = str(data.get("description", ""))
-            stop = {"the","and","for","with","from","into","above","below","after","before","about","that","this"}
-            query_tokens = [w.lower() for w in re.findall(r"[a-z]{4,}", query) if w.lower() not in stop]
-            def roots(text):
-                found=set()
-                for token in re.findall(r"[a-z]{4,}", text.lower()):
-                    found.add(token[:5] if len(token)>5 else token)
-                return found
-            title_roots = roots(title)
-            all_roots = roots(title + " " + description)
-            wanted = {w[:5] if len(w)>5 else w for w in query_tokens}
-            title_hits = len(wanted & title_roots)
-            total_hits = len(wanted & all_roots)
-            if title_hits < 1 or total_hits < 2:
+            if not _relevant_result(query, title, description):
                 continue
             seen.add(nasa_id)
             try:
@@ -365,6 +374,12 @@ def archive_video(query: str, used: set[str], dest: Path):
             meta = requests.get(f"https://archive.org/metadata/{ident}",
                 headers={"User-Agent": UA}, timeout=30).json()
             md = meta.get("metadata", {})
+            title = str(item.get("title", ""))
+            description = " ".join(str(md.get(key, "")) for key in
+                                   ("description", "subject", "keywords", "notes", "creator"))
+            if not _relevant_result(query, title, description):
+                print(f"[MEDIA] Internet Archive rejected unrelated item: {title[:120]}", flush=True)
+                continue
             license_url = str(md.get("licenseurl", md.get("license", ""))).lower()
             # Do not assume every Internet Archive item is public domain.
             allowed = ("creativecommons.org/publicdomain" in license_url or
