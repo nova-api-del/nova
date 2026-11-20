@@ -8,6 +8,12 @@ from pathlib import Path
 import requests
 import edge_tts
 
+try:
+    from wan2x1_fallback import available as wan_available, generate as wan_generate
+except Exception:
+    wan_available = lambda: False
+    wan_generate = lambda prompt, out, seconds=5: None
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output"
 W, H = 1080, 1920
@@ -376,9 +382,28 @@ def find_video(query: str, used: set[str], dest: Path):
                 return clip, attribution
         except Exception as exc:
             print(f"[MEDIA] {provider.__name__}: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
+    # Optional true AI video fallback. It runs only when a Wan2.1 model directory is explicitly configured.
+    if os.getenv("AI_MODE", "auto").lower() in ("auto", "wan", "ai") and wan_available():
+        try:
+            prompt = ("Photorealistic cinematic science documentary footage, no text, no logos, "
+                      "natural camera movement, realistic lighting: " + query)
+            ai_clip = wan_generate(prompt, dest.with_suffix(".wan.mp4"), seconds=5)
+            if ai_clip:
+                print(f"[MEDIA] Wan2.1: FOUND for {query}", flush=True)
+                return ai_clip, {
+                    "file": f"Wan2.1 AI video: {query}",
+                    "url": "https://github.com/Wan-Video/Wan2.1",
+                    "license": "Wan2.1 model license; generated output subject to model terms",
+                    "artist": "Nova AI generation",
+                    "credit": "Prompt-generated video",
+                    "source": "Wan2.1",
+                    "kind": "ai_generated_video"
+                }
+        except Exception as exc:
+            print(f"[MEDIA] Wan2.1: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
     return None, None
 
-async def make_voice(text: str, path: Path):
+(text: str, path: Path):
     await edge_tts.Communicate(text, VOICE, rate="-3%", volume="+0%").save(str(path))
 
 def make_srt(text: str, duration: float, path: Path):
