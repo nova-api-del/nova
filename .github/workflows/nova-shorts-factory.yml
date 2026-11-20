@@ -28,7 +28,12 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
           pip install -r requirements-shorts.txt
-      - name: Build real-footage cinematic Shorts
+      - name: Build multi-source cinematic Shorts
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
         run: |
           rm -rf output
           mkdir -p output
@@ -44,9 +49,10 @@ jobs:
           for path in files:
               item=json.load(open(path))
               assert item.get('quality_gate') == 'passed', path
-              assert item.get('visual_type') == 'five_distinct_moving_video_clips', path
-              assert len({source['url'] for source in item['sources']}) == 5, path
-          print(f'PASS: {len(files)} cinematic video(s), each with five distinct moving-footage sources')
+              assert item.get('visual_type') == 'five_distinct_moving_scenes', path
+              assert len(item['sources']) == 5, path
+              assert sum(source.get('kind') != 'ai_generated_image_animated' for source in item['sources']) >= 3, path
+          print(f'PASS: {len(files)} cinematic video(s), each with five distinct moving scenes and at least three real video sources')
           PY
       - name: Upload Shorts
         uses: actions/upload-artifact@v4
