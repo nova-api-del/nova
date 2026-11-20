@@ -716,7 +716,7 @@ async def _make_voice(text: str, path: Path):
     words = len(re.findall(r"\b[\w'-]+\b", text))
     rate = round((words / 145 / (55 / 60) - 1) * 100)
     rate = max(-10, min(30, rate))
-    communicate = edge_tts.Communicate(text, VOICE, rate=f"{rate:+d}%")
+    communicate = edge_tts.Communicate(text, VOICE, rate=f"{rate:+d}%", boundary="WordBoundary")
     boundaries = []
     with path.open("wb") as audio_file:
         async for chunk in communicate.stream():
