@@ -6,6 +6,10 @@ on:
         description: "Cinematic Shorts to build (start with 1 for quality review)"
         required: false
         default: "1"
+      ai_mode:
+        description: "AI mode: auto uses AI only when a compatible GPU/model is available"
+        required: false
+        default: "auto"
 concurrency:
   group: nova-shorts-factory
   cancel-in-progress: false
@@ -17,6 +21,7 @@ jobs:
       contents: write
     env:
       COUNT: ${{ github.event.inputs.count || '1' }}
+      AI_MODE: ${{ github.event.inputs.ai_mode || 'auto' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,6 +39,7 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
           POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+          AI_MODE: ${{ env.AI_MODE }}
         run: |
           rm -rf output
           mkdir -p output
@@ -52,7 +58,7 @@ jobs:
               assert item.get('visual_type') == 'five_distinct_moving_scenes', path
               assert len(item['sources']) == 5, path
               assert sum(source.get('kind') != 'ai_generated_image_animated' for source in item['sources']) >= 3, path
-          print(f'PASS: {len(files)} cinematic video(s), each with five distinct moving scenes and at least three real video sources')
+          print(f'PASS: {len(files)} cinematic video(s)')
           PY
       - name: Upload Shorts
         uses: actions/upload-artifact@v4
