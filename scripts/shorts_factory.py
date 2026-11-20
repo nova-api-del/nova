@@ -100,7 +100,15 @@ def main():
         for p in imgs: lines += [f"file '{p}'",f"duration {each:.3f}"]
         lines.append(f"file '{imgs[-1]}'"); concat.write_text("\n".join(lines))
         video=work/"video.mp4"
-        run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),"-vf","zoompan=z='min(zoom+0.0008,1.12)':d=1:s=1080x1920:fps=30,format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
+        frames_per_scene=max(1,round(each*30))
+        run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-i",str(audio),"-map","0:v:0","-map","1:a:0","-vf",f"zoompan=z='min(zoom+0.0008,1.12)':d={frames_per_scene}:s=1080x1920:fps=30,format=yuv420p","-t",str(dur),"-c:v","libx264","-preset","veryfast","-crf","24","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video)])
     meta={"title":title+" #"+str(args.slot+1),"description":"A fast science and nature discovery. Follow Nova for more. #shorts #facts #science #education","date_utc":datetime.now(timezone.utc).isoformat(),"topic":title,"slot":args.slot,"duration_seconds":round(dur,1)}
+    actual=float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(video)]))
+    if actual < min(10.0,dur*0.8):
+        raise RuntimeError(f"Rendered video is too short: {actual:.2f}s (voiceover {dur:.2f}s)")
+    streams=subprocess.check_output(["ffprobe","-v","error","-show_entries","stream=codec_type,width,height","-of","json",str(video)],text=True)
+    info=json.loads(streams); types={x.get("codec_type") for x in info.get("streams",[])}
+    if "video" not in types or "audio" not in types:
+        raise RuntimeError("Rendered video is missing its video or audio stream")
     final=OUT/f"short_{args.slot+1:02d}.mp4"; final.write_bytes(video.read_bytes()); (OUT/f"short_{args.slot+1:02d}.json").write_text(json.dumps(meta,indent=2))
 if __name__=="__main__": main()
