@@ -42,4 +42,4 @@ def record_topic(history_file: Path, topic: str, today: str) -> None:
     history.setdefault("version", 1)
     history["last_used"][topic] = today
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(history, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    path.write_text(json.dumps(history, indent=2, sort_keys=True) + "\n", encoding="utf-8")
