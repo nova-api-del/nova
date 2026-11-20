@@ -31,8 +31,8 @@ jobs:
           pip install edge-tts requests Pillow
       - name: Generate narrated illustrated story
         env:
-          POLLINATIONS_API_KEY: \${{ secrets.POLLINATIONS_API_KEY }}
-          POLLINATIONS_IMAGE_MODEL: \${{ vars.POLLINATIONS_IMAGE_MODEL }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
           TTS_VOICE: en-US-GuyNeural
         run: |
           rm -rf output/story_episode
@@ -53,14 +53,14 @@ jobs:
       - name: Upload episode and credits
         uses: actions/upload-artifact@v4
         with:
-          name: nova-story-episode-\${{ github.run_number }}
+          name: nova-story-episode-${{ github.run_number }}
           path: output/story_episode/*
           retention-days: 14
       - name: Publish preview release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: nova-story-\${{ github.run_number }}
-          name: Nova Illustrated Story \${{ github.run_number }}
+          tag_name: nova-story-${{ github.run_number }}
+          name: Nova Illustrated Story ${{ github.run_number }}
           files: |
             output/story_episode/nova_story_episode.mp4
             output/story_episode/metadata.json
