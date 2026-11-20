@@ -1,0 +1,112 @@
+name: Nova Footage Shorts Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Number of Shorts to build"
+        required: false
+        default: "1"
+        type: string
+  schedule:
+    - cron: "17 9 * * *"
+    - cron: "17 17 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-footage-factory
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COUNT: ${{ github.event.inputs.count || '1' }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+      POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+    steps:
+      - name: Checkout Nova
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          github-token: ${{ github.token }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          pip install --disable-pip-version-check -r requirements-shorts.txt
+          ffmpeg -version | head -n 1
+          fc-match "DejaVu Sans" | head -n 1
+
+      - name: Build footage-first Shorts
+        run: |
+          rm -rf output
+          mkdir -p output
+          for i in $(seq 0 $((COUNT-1))); do
+            python scripts/cinematic_shorts.py --slot "$i"
+          done
+
+      - name: Validate every Short
+        run: |
+          python - <<'PY'
+          import glob, json, subprocess, sys
+          files = sorted(glob.glob("output/short_*.json"))
+          if not files:
+              raise SystemExit("No Short metadata produced")
+          for p in files:
+              m=json.load(open(p))
+              if m.get("quality_gate") != "passed":
+                  raise SystemExit(f"quality gate failed: {p}")
+              if not (45 <= float(m.get("duration_seconds",0)) <= 64):
+                  raise SystemExit(f"duration failed: {p}")
+              if len(m.get("sources",[])) != 5:
+                  raise SystemExit(f"scene count failed: {p}")
+              if len([s for s in m["sources"] if s.get("kind") not in ("ai_generated_image_animated","licensed_image_animated")]) < 1:
+                  raise SystemExit(f"no real moving video source: {p}")
+          for mp4 in glob.glob("output/short_*.mp4"):
+              r=subprocess.run(["ffprobe","-v","error","-show_entries","stream=codec_type,width,height","-of","json",mp4],capture_output=True,text=True)
+              if r.returncode != 0:
+                  raise SystemExit(f"ffprobe failed: {mp4}")
+              streams=json.loads(r.stdout)["streams"]
+              v=next((s for s in streams if s.get("codec_type")=="video"),{})
+              if (v.get("width"),v.get("height")) != (1080,1920) or not any(s.get("codec_type")=="audio" for s in streams):
+                  raise SystemExit(f"format failed: {mp4}")
+          print(f"PASS: {len(files)} Shorts")
+          PY
+
+      - name: Upload finished Shorts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-footage-shorts-${{ github.run_number }}
+          path: output/short_*.mp4
+          retention-days: 7
+
+      - name: Upload metadata and source credits
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-footage-metadata-${{ github.run_number }}
+          path: output/*.json
+          retention-days: 7
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nova-footage-${{ github.run_number }}
+          name: Nova Footage Shorts ${{ github.run_number }}
+          files: |
+            output/short_*.mp4
+            output/*.json
+          generate_release_notes: false
