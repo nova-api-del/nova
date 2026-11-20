@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse, asyncio, json, os, random, subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from topic_history import choose_topic, record_topic
 import requests
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
@@ -98,9 +99,11 @@ def make_captions(text,duration,path):
     return path
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("--slot",type=int,default=0); args=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument("--slot",type=int,default=0); ap.add_argument("--history-file",default="data/topic_history.json"); args=ap.parse_args()
+    today=datetime.now(timezone.utc).date().isoformat()
     day=datetime.now(timezone.utc).strftime("%Y%m%d")
-    topic_index=(datetime.now(timezone.utc).date().toordinal()*6+args.slot)%len(TOPICS)
+    history_path=Path(args.history_file)
+    topic_index=choose_topic([item[0] for item in TOPICS],history_path,today,args.slot)
     title,search=TOPICS[topic_index]; facts=FACTS[title]
     work=OUT/f"job_{day}_{args.slot}"; work.mkdir(parents=True,exist_ok=True)
     narration="Here is something most people never realize. "+" ".join(facts)+" Follow Nova for more discoveries."
@@ -130,5 +133,6 @@ def main():
     info=json.loads(streams); types={x.get("codec_type") for x in info.get("streams",[])}
     if "video" not in types or "audio" not in types:
         raise RuntimeError("Rendered video is missing its video or audio stream")
+    record_topic(history_path,title,today)
     final=OUT/f"short_{args.slot+1:02d}.mp4"; final.write_bytes(video.read_bytes()); (OUT/f"short_{args.slot+1:02d}.json").write_text(json.dumps(meta,indent=2))
 if __name__=="__main__": main()
