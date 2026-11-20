@@ -10,3 +10,10 @@ The workflow currently generates a Short; it does not publish it to YouTube or M
 
 ## Content
 The generator rotates through a small set of English educational scripts and original graphic cards. Expand `TOPICS` in `scripts/generate_short.py` to add topics. Verify factual claims before publication.
+
+
+## Nova Shorts Factory (current pipeline)
+
+The `Nova Shorts Factory` workflow builds six vertical videos, adds English voice-over and burned-in timed captions, validates the rendered video/audio streams, and uploads both workflow artifacts and downloadable GitHub Release assets. It rotates the topic set between days to reduce immediate repetition. Release assets can be used as public media URLs when scheduling through a connected publishing service.
+
+The factory does **not** itself authenticate to YouTube or TikTok. Publishing is a separate step through the connected Metricool accounts or a properly configured platform API. Never store access tokens in source files; use repository Actions secrets.
