@@ -37,7 +37,7 @@ TOPICS = [
             "Monitoring includes earthquakes, ground deformation, gas emissions, and changes in heat.",
             "Past eruptions help researchers understand risk, but they cannot predict an exact date."
         ],
-        "queries": ["supervolcano volcanic caldera eruption", "volcanic ash plume eruption aerial", "volcanic ash falling landscape", "volcano monitoring scientists seismology", "lava flowing volcano landscape"]
+        "queries": ["supervolcano volcanic caldera eruption", "volcanic ash plume eruption aerial", "volcanic ash falling landscape", "volcano eruption lava flowing", "volcanic crater aerial landscape"]
     },
     {
         "title": "What Is Hiding in the Deepest Ocean?",
