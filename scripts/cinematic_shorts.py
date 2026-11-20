@@ -93,36 +93,111 @@ def run(cmd):
 def probe_duration(path: Path) -> float:
     return float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(path)], text=True).strip())
 
-def commons_video(query: str, used: set[str], dest: Path):
-    api = "https://commons.wikimedia.org/w/api.php"
-    params = {
-        "action":"query","format":"json","generator":"search","gsrsearch":query+" filetype:video",
-        "gsrnamespace":6,"gsrlimit":30,"prop":"imageinfo",
-        "iiprop":"url|mime|size|extmetadata"
-    }
-    data = requests.get(api, params=params, headers={"User-Agent":UA}, timeout=30).json()
-    pages = list((data.get("query") or {}).get("pages", {}).values())
-    for page in pages:
-        info = (page.get("imageinfo") or [{}])[0]
-        url, mime = info.get("url"), info.get("mime","")
-        title = page.get("title","")
-        if not url or not mime.startswith("video/") or url in used:
-            continue
-        if info.get("size",0) > 120_000_000:
-            continue
-        ext = ".mp4" if "mp4" in mime else ".webm"
-        target = dest.with_suffix(ext)
-        response = requests.get(url, headers={"User-Agent":UA}, timeout=120)
+def _download_verified(url: str, dest: Path):
+    try:
+        response = requests.get(url, headers={"User-Agent": UA}, timeout=150, stream=True)
         response.raise_for_status()
-        if len(response.content) < 100_000:
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        total = 0
+        with tmp.open("wb") as out:
+            for chunk in response.iter_content(1024 * 1024):
+                if chunk:
+                    total += len(chunk)
+                    if total > 120_000_000:
+                        raise ValueError("source clip exceeds 120 MB")
+                    out.write(chunk)
+        if total < 100_000:
+            tmp.unlink(missing_ok=True)
+            return None
+        tmp.replace(dest)
+        # Reject HTML/error pages and corrupt or non-video downloads before rendering.
+        subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                        "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(dest)],
+                       check=True, capture_output=True, text=True, timeout=30)
+        return dest
+    except Exception:
+        dest.with_suffix(dest.suffix + ".part").unlink(missing_ok=True)
+        dest.unlink(missing_ok=True)
+        return None
+
+def nasa_video(query: str, used: set[str], dest: Path):
+    """Search NASA's public video library and resolve real MP4/MOV files via asset manifests."""
+    search_api = "https://images-api.nasa.gov/search"
+    headers = {"User-Agent": UA}
+    # Shorter variants improve recall when the full descriptive phrase is not indexed.
+    terms = [query, " ".join(query.split()[:3]), " ".join(query.split()[-2:])]
+    seen = set()
+    for term in terms:
+        try:
+            payload = requests.get(search_api, params={"q": term, "media_type": "video", "page_size": 30},
+                                   headers=headers, timeout=30).json()
+            items = (payload.get("collection") or {}).get("items") or []
+        except Exception:
             continue
-        target.write_bytes(response.content)
-        meta = info.get("extmetadata") or {}
-        def val(key):
-            return re.sub("<[^>]+>", "", (meta.get(key) or {}).get("value","")).strip()
-        used.add(url)
-        return target, {"file":title, "url":url, "license":val("LicenseShortName"), "artist":val("Artist"), "credit":val("Credit")}
+        for item in items:
+            data = (item.get("data") or [{}])[0]
+            nasa_id = data.get("nasa_id")
+            if not nasa_id or nasa_id in used or nasa_id in seen:
+                continue
+            seen.add(nasa_id)
+            try:
+                manifest = requests.get(f"https://images-api.nasa.gov/asset/{nasa_id}",
+                                        headers=headers, timeout=30).json()
+                assets = (manifest.get("collection") or {}).get("items") or []
+            except Exception:
+                continue
+            candidates = [a.get("href", "") for a in assets]
+            candidates = [u for u in candidates if re.search(r"\.(mp4|mov)(?:$|\?)", u, re.I)]
+            for url in candidates[:4]:
+                ext = ".mov" if ".mov" in url.lower() else ".mp4"
+                path = _download_verified(url, dest.with_suffix(ext))
+                if path:
+                    used.add(nasa_id)
+                    return path, {"file": data.get("title", nasa_id), "url": url,
+                                  "license": "NASA media usage guidance applies",
+                                  "artist": data.get("center", "NASA"),
+                                  "credit": data.get("description", "")[:500],
+                                  "source_id": nasa_id}
     return None, None
+
+def commons_video(query: str, used: set[str], dest: Path):
+    """Wikimedia fallback using the supported list=search + filemime query."""
+    api = "https://commons.wikimedia.org/w/api.php"
+    headers = {"User-Agent": UA}
+    for mime_query, ext in [("filemime:video/webm", ".webm"), ("filemime:video/mp4", ".mp4")]:
+        try:
+            params = {"action":"query", "format":"json", "list":"search", "srnamespace":6,
+                      "srlimit":30, "srsearch":f"{query} {mime_query}",
+                      "prop":"imageinfo", "iiprop":"url|mime|size|extmetadata"}
+            data = requests.get(api, params=params, headers=headers, timeout=30).json()
+            pages = (data.get("query") or {}).get("search") or []
+            for result in pages:
+                title = result.get("title", "")
+                detail = requests.get(api, params={"action":"query","format":"json","titles":title,
+                    "prop":"imageinfo","iiprop":"url|mime|size|extmetadata"}, headers=headers, timeout=30).json()
+                page = next(iter((detail.get("query") or {}).get("pages", {}).values()), {})
+                info = (page.get("imageinfo") or [{}])[0]
+                url, mime = info.get("url"), info.get("mime", "")
+                if not url or not mime.startswith("video/") or url in used or info.get("size", 0) > 120_000_000:
+                    continue
+                path = _download_verified(url, dest.with_suffix(ext))
+                if not path:
+                    continue
+                meta = info.get("extmetadata") or {}
+                def val(key):
+                    return re.sub("<[^>]+>", "", (meta.get(key) or {}).get("value", "")).strip()
+                used.add(url)
+                return path, {"file":title, "url":url, "license":val("LicenseShortName"),
+                              "artist":val("Artist"), "credit":val("Credit")}
+        except Exception:
+            continue
+    return None, None
+
+def find_video(query: str, used: set[str], dest: Path):
+    clip, attribution = nasa_video(query, used, dest)
+    if clip:
+        return clip, attribution
+    return commons_video(query, used, dest)
 
 async def make_voice(text: str, path: Path):
     await edge_tts.Communicate(text, VOICE, rate="-3%", volume="+0%").save(str(path))
@@ -161,7 +236,7 @@ def build(slot: int):
     used, sources, scenes = set(), [], []
     scene_duration = duration / len(topic["queries"])
     for i, query in enumerate(topic["queries"]):
-        clip, attribution = commons_video(query, used, work / f"source_{i}")
+        clip, attribution = find_video(query, used, work / f"source_{i}")
         if clip is None:
             raise RuntimeError(f"QUALITY GATE: no distinct Wikimedia Commons video found for scene {i+1}: {query}. Refusing to render text cards or reuse a generic clip.")
         scene = work / f"scene_{i:02d}.mp4"
