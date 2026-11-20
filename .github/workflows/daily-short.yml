@@ -8,6 +8,10 @@ on:
         description: "Topic slot (0-5); leave blank to rotate by day"
         required: false
         default: ""
+  workflow_run:
+    workflows: ["Nova Cinematic Short Test"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -15,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build-short:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
