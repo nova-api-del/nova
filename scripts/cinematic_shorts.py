@@ -403,7 +403,7 @@ def find_video(query: str, used: set[str], dest: Path):
             print(f"[MEDIA] Wan2.1: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
     return None, None
 
-(text: str, path: Path):
+async def make_voice(text: str, path: Path):
     await edge_tts.Communicate(text, VOICE, rate="-3%", volume="+0%").save(str(path))
 
 def make_srt(text: str, duration: float, path: Path):
