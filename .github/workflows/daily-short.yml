@@ -1,12 +1,22 @@
 name: Nova Daily Short
 on:
+  schedule:
+    - cron: "0 15 * * *"
   workflow_dispatch:
+    inputs:
+      slot:
+        description: "Topic slot (0-5); leave blank to rotate by day"
+        required: false
+        default: ""
 permissions:
   contents: read
+concurrency:
+  group: nova-daily-short
+  cancel-in-progress: false
 jobs:
   build-short:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -14,17 +24,55 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install FFmpeg
+      - name: Set up cached static FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          linking-type: static
+          github-token: ${{ github.token }}
+      - name: Verify FFmpeg
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          set -euo pipefail
+          ffmpeg -version | head -n 1
+          ffmpeg -filters 2>/dev/null | grep -E ' subtitles | freezedetect | blackdetect '
+          fc-match "DejaVu Sans" | head -n 1
       - name: Install Python packages
-        run: python -m pip install --upgrade pip edge-tts pillow
-      - name: Generate English Short
-        run: python scripts/generate_short.py
-      - name: Upload video artifact
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          pip install --disable-pip-version-check -r requirements-shorts.txt
+      - name: Generate cinematic English Short
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+        run: |
+          if [ -n "${{ inputs.slot }}" ]; then
+            SLOT="${{ inputs.slot }}"
+          else
+            SLOT=$(( ($(date -u +%j) - 1) % 6 ))
+          fi
+          python scripts/cinematic_shorts.py --slot "$SLOT"
+      - name: Strict visual quality gate
+        run: python scripts/strict_visual_gate.py
+      - name: Prepare publishing artifact
+        run: |
+          cp output/short_01.mp4 output/nova_short.mp4
+          cp output/short_01.json output/metadata.json
+          python - <<'PY'
+          import json
+          m=json.load(open("output/metadata.json", encoding="utf-8"))
+          assert m["quality_gate"] == "passed"
+          assert m["visual_quality_gate"] == "passed"
+          assert 45 <= m["duration_seconds"] <= 64
+          assert len(m["sources"]) == 5
+          print("Ready:", m["title"], m["duration_seconds"], "seconds")
+          PY
+      - name: Upload approved Short artifact
         uses: actions/upload-artifact@v4
         with:
           name: nova-short-${{ github.run_number }}
-          path: output/
-          retention-days: 7
+          path: |
+            output/nova_short.mp4
+            output/metadata.json
+          retention-days: 14
