@@ -27,12 +27,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install FFmpeg and dependencies
+      - name: Set up cached static FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          linking-type: static
+          github-token: ${{ github.token }}
+      - name: Verify FFmpeg and install Python dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
-          python -m pip install --upgrade pip
-          pip install -r requirements-shorts.txt
+          ffmpeg -version | head -n 1
+          ffmpeg -filters 2>/dev/null | grep -E ' subtitles | freezedetect | blackdetect '
+          fc-match "DejaVu Sans" | head -n 1
+          python -m pip install --disable-pip-version-check --upgrade pip
+          pip install --disable-pip-version-check -r requirements-shorts.txt
       - name: Build multi-source cinematic Shorts
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -46,6 +53,8 @@ jobs:
           for i in $(seq 0 $((COUNT-1))); do
             python scripts/cinematic_shorts.py --slot "$i"
           done
+      - name: Run strict visual quality gate
+        run: python scripts/strict_visual_gate.py
       - name: Enforce footage quality gate
         run: |
           python - <<'PY'
@@ -55,7 +64,9 @@ jobs:
           for path in files:
               item=json.load(open(path))
               assert item.get('quality_gate') == 'passed', path
+              assert item.get('visual_quality_gate') == 'passed', path
               assert item.get('visual_type') == 'five_distinct_moving_scenes', path
+              assert 45 <= item.get('duration_seconds', 0) <= 64, path
               assert len(item['sources']) == 5, path
               assert sum(source.get('kind') != 'ai_generated_image_animated' for source in item['sources']) >= 3, path
           print(f'PASS: {len(files)} cinematic video(s)')
