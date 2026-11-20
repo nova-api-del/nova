@@ -65,10 +65,12 @@ jobs:
               item=json.load(open(path))
               assert item.get('quality_gate') == 'passed', path
               assert item.get('visual_quality_gate') == 'passed', path
-              assert item.get('visual_type') == 'five_distinct_moving_scenes', path
+              assert item.get('visual_type') == 'five_distinct_animated_scenes', path
               assert 45 <= item.get('duration_seconds', 0) <= 64, path
               assert len(item['sources']) == 5, path
               assert sum(source.get('kind') != 'ai_generated_image_animated' for source in item['sources']) >= 3, path
+              assert sum(source.get('kind') not in ('ai_generated_image_animated', 'licensed_image_animated') for source in item['sources']) >= 1, path
+              assert sum(source.get('kind') == 'ai_generated_image_animated' for source in item['sources']) <= 2, path
           print(f'PASS: {len(files)} cinematic video(s)')
           PY
       - name: Upload Shorts
