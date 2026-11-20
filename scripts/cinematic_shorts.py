@@ -506,6 +506,8 @@ def commons_image(query: str, used: set[str], dest: Path):
                     return re.sub("<[^>]+>", "", raw).strip()
                 license_name = clean("LicenseShortName")
                 license_url = clean("LicenseUrl").lower()
+                if any(x in license_url for x in ("/by-nc", "/by-nd", "noncommercial", "noderivatives")):
+                    continue
                 if not (license_name.lower() in ("cc0","public domain","pd") or
                         any(x in license_url for x in ("creativecommons.org/licenses/by/","creativecommons.org/licenses/by-sa/"))):
                     continue
