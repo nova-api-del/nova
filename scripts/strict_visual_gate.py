@@ -82,10 +82,18 @@ def main():
             failures.append(f"{video.name}: expected 1080x1920 portrait video")
         if not has_audio:
             failures.append(f"{video.name}: narration/audio stream missing")
-        scenes=sorted(meta_path.parent.glob("cinematic_*/*scene_*.mp4"))
+        try:
+            slot_number = int(stem.rsplit("_", 1)[1])
+            scene_dirs = sorted(meta_path.parent.glob(f"cinematic_*_{slot_number}"))
+            scenes = sorted(scene_dirs[-1].glob("scene_*.mp4")) if scene_dirs else []
+        except (ValueError, IndexError):
+            scenes = []
         if len(scenes)!=5:
-            failures.append(f"{stem}: expected 5 rendered scenes, found {len(scenes)}")
+            failures.append(f"{stem}: expected 5 rendered scenes for this video, found {len(scenes)}")
             continue
+        voice_duration = float(meta.get("duration_seconds", 0))
+        if not 45 <= voice_duration <= 64:
+            failures.append(f"{stem}: expected 45-64 seconds, got {voice_duration:.1f}s")
         for scene in scenes:
             try:
                 duration,black,freeze=inspect_scene(scene)
