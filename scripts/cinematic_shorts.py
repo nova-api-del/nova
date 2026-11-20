@@ -638,7 +638,7 @@ def find_video(query: str, used: set[str], dest: Path):
 
 
 async def _make_voice(text: str, path: Path):
-    words = len(re.findall(r"\\b[\\w'-]+\\b", text))
+    words = len(re.findall(r"\b[\w'-]+\b", text))
     # Aim for roughly 55 seconds while keeping a natural speaking rate.
     rate = round((words / 145 / (55 / 60) - 1) * 100)
     rate = max(-10, min(30, rate))
@@ -665,7 +665,7 @@ def _render_scene(source: Path, destination: Path, seconds: float):
     )
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-ss", f"{offset:.3f}", "-i", str(source), "-t", f"{segment:.3f}",
+        "-stream_loop", "-1", "-ss", f"{offset:.3f}", "-i", str(source), "-t", f"{seconds:.3f}",
         "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast",
         "-crf", "20", "-movflags", "+faststart", str(destination)
     ])
@@ -719,7 +719,7 @@ def build(slot: int):
 
     concat_file = scene_dir / "scenes.txt"
     concat_file.write_text(
-        "".join(f"file '{p.resolve().as_posix()}'\\n" for p in rendered_scenes),
+        "".join(f"file '{p.resolve().as_posix()}'\n" for p in rendered_scenes),
         encoding="utf-8"
     )
     silent_video = scene_dir / "joined_scenes.mp4"
