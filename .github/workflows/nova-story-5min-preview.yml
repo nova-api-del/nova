@@ -1,0 +1,45 @@
+name: Nova Five-Minute Illustrated Story Preview
+on:
+  push:
+    paths:
+      - 'scripts/story_episode_5min.py'
+      - '.github/workflows/nova-story-5min-preview.yml'
+  workflow_dispatch:
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install Python dependencies
+        run: python -m pip install requests pillow
+      - name: Render five-minute illustrated episode
+        run: python scripts/story_episode_5min.py
+      - name: Verify output
+        run: |
+          test -s output/story_episode_5min/nova_desert_5min.mp4
+          ffprobe -v error -show_entries format=duration -of csv=p=0 output/story_episode_5min/nova_desert_5min.mp4
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('output/story_episode_5min/metadata.json')
+          m=json.loads(p.read_text())
+          assert 298 <= m['duration_seconds'] <= 302, m
+          assert m['scene_count'] >= 10, m
+          assert Path('output/story_episode_5min/nova_desert_5min.mp4').stat().st_size > 3_000_000
+          print('PASS',m)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-desert-five-minute-preview-${{ github.run_number }}
+          path: output/story_episode_5min/*
+          retention-days: 14
