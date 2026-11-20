@@ -2,6 +2,9 @@ name: Nova Daily Short
 on:
   schedule:
     - cron: "0 15 * * *"
+  push:
+    paths:
+      - ".github/workflows/daily-short.yml"
   workflow_dispatch:
     inputs:
       slot:
@@ -61,8 +64,13 @@ jobs:
         run: python scripts/strict_visual_gate.py
       - name: Prepare publishing artifact
         run: |
-          cp output/short_01.mp4 output/nova_short.mp4
-          cp output/short_01.json output/metadata.json
+          set -euo pipefail
+          VIDEO="$(find output -maxdepth 1 -type f -name 'short_*.mp4' -print -quit)"
+          test -n "$VIDEO"
+          META="${VIDEO%.mp4}.json"
+          test -f "$META"
+          cp "$VIDEO" output/nova_short.mp4
+          cp "$META" output/metadata.json
           python - <<'PY'
           import json
           m=json.load(open("output/metadata.json", encoding="utf-8"))
