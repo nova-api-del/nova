@@ -1,9 +1,6 @@
 name: Nova Daily Short
 on:
   workflow_dispatch:
-  schedule:
-    # 19:00 Baghdad time (UTC+3)
-    - cron: "0 16 * * *"
 permissions:
   contents: read
 jobs:

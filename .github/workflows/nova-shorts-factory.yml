@@ -8,6 +8,9 @@ on:
         default: "6"
   schedule:
     - cron: "0 16 * * *"
+concurrency:
+  group: nova-shorts-factory
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,6 +20,11 @@ jobs:
       COUNT: ${{ github.event.inputs.count || '6' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check out topic history branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: topic-data
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -26,13 +34,24 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade pip
           pip install -r requirements-shorts.txt
+      - name: Test topic history
+        run: python -m unittest discover -s tests -v
       - name: Build Shorts
         run: |
           rm -rf output
           mkdir -p output
           for i in $(seq 0 $((COUNT-1))); do
-            python scripts/shorts_factory.py --slot "$i"
+            python scripts/shorts_factory.py --slot "$i" --history-file topic-data/topic_history.json
           done
+      - name: Save topic history
+        run: |
+          git -C topic-data config user.name "github-actions[bot]"
+          git -C topic-data config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C topic-data add topic_history.json
+          if ! git -C topic-data diff --cached --quiet; then
+            git -C topic-data commit -m "Update Shorts topic history [skip ci]"
+            git -C topic-data push origin data
+          fi
       - name: Upload Shorts
         uses: actions/upload-artifact@v4
         with:

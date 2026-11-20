@@ -1,0 +1,21 @@
+name: Phase 1 Topic History Tests
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/topic_history.py"
+      - "scripts/shorts_factory.py"
+      - "tests/**"
+      - ".github/workflows/nova-shorts-factory.yml"
+      - ".github/workflows/phase-1-tests.yml"
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run topic history tests
+        run: python -m unittest discover -s tests -v
