@@ -12,6 +12,10 @@ on:
         description: "Topic slot to test (0-5)"
         required: true
         default: "0"
+concurrency:
+  group: nova-cinematic-short-test
+  cancel-in-progress: true
+
 permissions:
   contents: read
 jobs:
