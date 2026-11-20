@@ -27,19 +27,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Check FFmpeg and install only if missing
-        timeout-minutes: 6
+      - name: Set up cached static FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          linking-type: static
+          github-token: ${{ github.token }}
+      - name: Verify FFmpeg filters and fonts
         run: |
           set -euo pipefail
-          if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
-            ffmpeg -version | head -n 1
-          else
-            sudo timeout 180s apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
-            sudo timeout 180s apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
-          fi
-          command -v ffmpeg
+          ffmpeg -version | head -n 1
           command -v ffprobe
-          fc-match DejaVuSans | head -n 1
+          ffmpeg -filters 2>/dev/null | grep -E ' subtitles | freezedetect | blackdetect '
+          fc-match "DejaVu Sans" | head -n 1
       - name: Install Python dependencies
         timeout-minutes: 8
         run: |
