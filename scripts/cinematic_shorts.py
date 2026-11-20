@@ -112,9 +112,11 @@ def _download_verified(url: str, dest: Path):
             return None
         tmp.replace(dest)
         # Reject HTML/error pages and corrupt or non-video downloads before rendering.
-        subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+        probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
                         "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(dest)],
                        check=True, capture_output=True, text=True, timeout=30)
+        if "video" not in probe.stdout.lower():
+            raise ValueError("download contains no video stream")
         return dest
     except Exception:
         dest.with_suffix(dest.suffix + ".part").unlink(missing_ok=True)
