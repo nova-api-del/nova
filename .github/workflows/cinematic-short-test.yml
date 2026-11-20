@@ -65,8 +65,13 @@ jobs:
           assert sum(x.get("kind") != "ai_generated_image_animated" for x in m["sources"]) >= 3
           print("PASS:", m["title"], m["duration_seconds"], "seconds; strict visual gate passed")
           PY
-      - uses: actions/upload-artifact@v4
+      - name: Upload generated video and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: nova-cinematic-test-${{ github.run_number }}
-          path: output/short_*
+          path: |
+            output/short_*
+            output/cinematic_*
+          if-no-files-found: warn
           retention-days: 7
