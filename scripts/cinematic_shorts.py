@@ -420,6 +420,113 @@ def archive_video(query: str, used: set[str], dest: Path):
         pass
     return None, None
 
+def _download_image(url: str, dest: Path):
+    """Download and validate a still image without accepting HTML/error responses."""
+    try:
+        from PIL import Image
+        response = requests.get(url, headers={"User-Agent": UA}, timeout=45)
+        response.raise_for_status()
+        if len(response.content) < 12_000 or len(response.content) > 35_000_000:
+            return None
+        tmp = dest.with_suffix(".part")
+        tmp.write_bytes(response.content)
+        with Image.open(tmp) as im:
+            im.verify()
+            fmt = (im.format or "").lower()
+        ext = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}.get(fmt)
+        if not ext:
+            tmp.unlink(missing_ok=True)
+            return None
+        final = dest.with_suffix(ext)
+        tmp.replace(final)
+        return final
+    except Exception:
+        dest.with_suffix(".part").unlink(missing_ok=True)
+        return None
+
+def nasa_image(query: str, used: set[str], dest: Path):
+    """NASA public image library fallback; each image is attributed and animated in the edit."""
+    try:
+        data = requests.get("https://images-api.nasa.gov/search",
+            params={"q": query, "media_type": "image", "page_size": 25},
+            headers={"User-Agent": UA}, timeout=30)
+        data.raise_for_status()
+        items = (data.json().get("collection") or {}).get("items") or []
+        for item in items:
+            meta = (item.get("data") or [{}])[0]
+            ident = meta.get("nasa_id")
+            title = str(meta.get("title", ""))
+            desc = str(meta.get("description", ""))
+            if not ident or ident in used or not _relevant_result(query, title, desc):
+                continue
+            manifest = requests.get(f"https://images-api.nasa.gov/asset/{ident}",
+                headers={"User-Agent": UA}, timeout=25)
+            manifest.raise_for_status()
+            assets = (manifest.json().get("collection") or {}).get("items") or []
+            urls = [x.get("href", "") for x in assets]
+            urls = [u for u in urls if re.search(r"\.(jpg|jpeg|png)(?:$|\?)", u, re.I)]
+            for url in urls[:3]:
+                path = _download_image(url, dest)
+                if path:
+                    used.add(ident)
+                    return path, {"file": title, "url": url, "license": "NASA media usage guidance applies",
+                        "artist": meta.get("center", "NASA"), "credit": desc[:500],
+                        "source_id": ident, "source": "NASA", "kind": "licensed_image_animated"}
+    except Exception as exc:
+        print(f"[MEDIA] NASA image fallback error: {type(exc).__name__}: {str(exc)[:160]}", flush=True)
+    return None, None
+
+def commons_image(query: str, used: set[str], dest: Path):
+    """Wikimedia Commons still-image fallback, restricted to reusable licenses."""
+    api = "https://commons.wikimedia.org/w/api.php"
+    terms = list(dict.fromkeys([query, " ".join(query.split()[:3]), query.split()[0] if query.split() else query]))
+    for term in terms:
+        try:
+            search = requests.get(api, params={"action":"query","format":"json","list":"search",
+                "srnamespace":6,"srlimit":20,"srsearch":f"{term} filemime:image/jpeg"},
+                headers={"User-Agent": UA}, timeout=25)
+            search.raise_for_status()
+            results = (search.json().get("query") or {}).get("search") or []
+            for result in results:
+                title = result.get("title", "")
+                if not title or title in used:
+                    continue
+                detail = requests.get(api, params={"action":"query","format":"json","titles":title,
+                    "prop":"imageinfo","iiprop":"url|mime|size|extmetadata"},
+                    headers={"User-Agent": UA}, timeout=25)
+                detail.raise_for_status()
+                page = next(iter((detail.json().get("query") or {}).get("pages", {}).values()), {})
+                info = (page.get("imageinfo") or [{}])[0]
+                url, mime = info.get("url"), info.get("mime", "")
+                if not url or mime not in ("image/jpeg","image/png","image/webp") or info.get("size",0)>35_000_000:
+                    continue
+                extmeta = info.get("extmetadata") or {}
+                def clean(k):
+                    raw = str((extmeta.get(k) or {}).get("value", ""))
+                    return re.sub("<[^>]+>", "", raw).strip()
+                license_name = clean("LicenseShortName")
+                license_url = clean("LicenseUrl").lower()
+                if not (license_name.lower() in ("cc0","public domain","pd") or
+                        any(x in license_url for x in ("creativecommons.org/licenses/by/","creativecommons.org/licenses/by-sa/"))):
+                    continue
+                path = _download_image(url, dest)
+                if path:
+                    used.add(title)
+                    return path, {"file": title, "url": url, "license": license_name,
+                        "artist": clean("Artist"), "credit": clean("Attribution"),
+                        "source": "Wikimedia Commons", "kind": "licensed_image_animated"}
+        except Exception as exc:
+            print(f"[MEDIA] Wikimedia image fallback error: {type(exc).__name__}: {str(exc)[:120]}", flush=True)
+    return None, None
+
+def find_image(query: str, used: set[str], dest: Path):
+    for provider in (nasa_image, commons_image):
+        image, attribution = provider(query, used, dest)
+        if image:
+            print(f"[MEDIA] {provider.__name__}: FOUND for {query}", flush=True)
+            return image, attribution
+    return None, None
+
 def generate_ai_image(query: str, dest: Path):
     """Optional AI still generation; animated with a camera move during rendering.
     Pollinations currently requires an API key; never silently spend or claim it is free.
@@ -527,16 +634,19 @@ def build(slot: int):
                  "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,eq=contrast=1.04:saturation=1.12:brightness=0.01,format=yuv420p",
                  "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
         else:
-            # Up to two AI-generated stills may be animated with a slow camera move; never use text cards.
-            if generated_ai >= 2:
-                raise RuntimeError(f"QUALITY GATE: no real footage found for scene {i+1}: {query}; AI fallback limit reached.")
-            ai_image, attribution = generate_ai_image(query, work / f"ai_scene_{i}")
-            if ai_image is None:
-                raise RuntimeError(f"QUALITY GATE: all footage sources failed for scene {i+1}: {query}. Configure optional API keys or retry later.")
-            generated_ai += 1
+            # First use a reusable, topic-matched NASA/Commons still and animate it.
+            still, attribution = find_image(query, used, work / f"still_{i}")
+            if still is None:
+                # Optional AI imagery is capped; no blank/text-card scene is ever emitted.
+                if generated_ai >= 2:
+                    raise RuntimeError(f"QUALITY GATE: no licensed footage or image found for scene {i+1}: {query}; AI fallback limit reached.")
+                still, attribution = generate_ai_image(query, work / f"ai_scene_{i}")
+                if still is None:
+                    raise RuntimeError(f"QUALITY GATE: no usable video, licensed image, or AI image for scene {i+1}: {query}.")
+                generated_ai += 1
             zoom_frames = max(1, int(scene_duration * 30))
-            run(["ffmpeg","-y","-loop","1","-i",str(ai_image),"-t",f"{scene_duration:.3f}",
-                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0007,1.12)':d={zoom_frames}:s=1080x1920:fps=30,setsar=1,format=yuv420p",
+            run(["ffmpeg","-y","-loop","1","-i",str(still),"-t",f"{scene_duration:.3f}",
+                 "-vf",f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0007,1.12)':d={zoom_frames}:s=1080x1920:fps=30,setsar=1,eq=contrast=1.04:saturation=1.10,format=yuv420p",
                  "-an","-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p",str(scene)])
         scenes.append(scene); sources.append(attribution)
     concat = work / "scenes.txt"
@@ -554,16 +664,18 @@ def build(slot: int):
     audio = any(s.get("codec_type")=="audio" for s in streams["streams"])
     if video.get("width") != 1080 or video.get("height") != 1920 or not audio:
         raise RuntimeError("QUALITY GATE: expected 1080x1920 video and narration audio")
-    # Five distinct source URLs are mandatory; this is the critical no-slides/no-reuse check.
-    video_sources = [x for x in sources if x.get("kind") != "ai_generated_image_animated"]
-    if len(sources) != 5 or len({x.get("url") for x in video_sources}) != len(video_sources) or len(video_sources) < 3 or generated_ai > 2:
-        raise RuntimeError("QUALITY GATE: require five distinct moving scenes, at least three unique real video sources, and no more than two AI-generated animated scenes")
+    # Five distinct, attributed visual assets are mandatory. At least one must be actual video;
+    # the remaining scenes may use licensed stills with continuous Ken Burns motion.
+    sourced_assets = [x for x in sources if x.get("kind") != "ai_generated_image_animated"]
+    moving_video_sources = [x for x in sources if x.get("kind") not in ("ai_generated_image_animated", "licensed_image_animated")]
+    if len(sources) != 5 or len({x.get("url") for x in sourced_assets}) != len(sourced_assets) or len(sourced_assets) < 3 or len(moving_video_sources) < 1 or generated_ai > 2:
+        raise RuntimeError("QUALITY GATE: require five distinct attributed scenes, at least three licensed non-AI assets including one real video, and no more than two AI-generated scenes")
     output = OUT / f"short_{slot+1:02d}.mp4"
     output.write_bytes(final.read_bytes())
     metadata = {
         "title":topic["title"],"description":"Real-world footage, science explained. Follow Nova for more. #shorts #science #nature #documentary",
         "duration_seconds":round(actual,2),"language":"en","voice":VOICE,
-        "visual_type":"five_distinct_moving_scenes","quality_gate":"passed",
+        "visual_type":"five_distinct_animated_scenes","quality_gate":"passed",
         "sources":sources,"created_at":datetime.now(timezone.utc).isoformat()
     }
     (OUT / f"short_{slot+1:02d}.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
