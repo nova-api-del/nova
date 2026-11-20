@@ -27,7 +27,7 @@ def inspect_scene(path: Path):
         raise RuntimeError(f"{path.name}: ffmpeg blackdetect failed")
     black_time = 0.0
     for line in black.stderr.splitlines():
-        match = re.search(r"black_duration:([0-9.]+)", line)
+        match = re.search(r"black_duration:\\s*([0-9.]+)", line)
         if match:
             black_time += float(match.group(1))
 
@@ -43,13 +43,13 @@ def inspect_scene(path: Path):
     freeze_time = 0.0
     starts, ends = [], []
     for line in frozen.stderr.splitlines():
-        match = re.search(r"freeze_duration:([0-9.]+)", line)
+        match = re.search(r"freeze_duration:\\s*([0-9.]+)", line)
         if match:
             freeze_time += float(match.group(1))
-        match = re.search(r"freeze_start:([0-9.]+)", line)
+        match = re.search(r"freeze_start:\\s*([0-9.]+)", line)
         if match:
             starts.append(float(match.group(1)))
-        match = re.search(r"freeze_end:([0-9.]+)", line)
+        match = re.search(r"freeze_end:\\s*([0-9.]+)", line)
         if match:
             ends.append(float(match.group(1)))
     # A freeze that continues through EOF has freeze_start but no freeze_end.
