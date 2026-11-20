@@ -43,14 +43,14 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: blizzard-story-\${{ github.run_number }}
+          name: blizzard-story-${{ github.run_number }}
           path: output/blizzard_episode/*
           retention-days: 14
       - name: Publish downloadable release assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: blizzard-story-\${{ github.run_number }}
-          name: Blizzard Mystery Story \${{ github.run_number }}
+          tag_name: blizzard-story-${{ github.run_number }}
+          name: Blizzard Mystery Story ${{ github.run_number }}
           files: |
             output/blizzard_episode/blizzard_story_10min.mp4
             output/blizzard_episode/assets/thumbnail.png
