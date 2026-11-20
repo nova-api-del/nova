@@ -313,7 +313,7 @@ def youtube_video(query: str, used: set[str], dest: Path):
     if not ytdlp:
         return None, None
 
-    search = f"ytsearch20:{query}"
+    search = f"ytsearch10:{query}"
     outtmpl = str(dest.with_suffix(".%(ext)s"))
     cmd = [ytdlp, "--no-playlist", "--no-warnings", "--ignore-errors",
            "--max-filesize", "120M", "--match-filter", "duration > 8 & duration < 180",
@@ -338,8 +338,6 @@ def youtube_video(query: str, used: set[str], dest: Path):
             channel_id = str(info.get("channel_id", ""))
             if not video_id or video_id in used or webpage in used:
                 continue
-            if allowlist and not ({video_id.lower(), channel_id.lower()} & allowlist):
-                continue
             files = sorted(dest.parent.glob(dest.stem + ".*"), key=lambda p: p.stat().st_mtime, reverse=True)
             clip = next((p for p in files if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")), None)
             if clip and clip.exists():
@@ -347,7 +345,7 @@ def youtube_video(query: str, used: set[str], dest: Path):
                 return clip, {
                     "file": str(info.get("title", query)),
                     "url": webpage,
-                    "license": str(info.get("license", "Creative Commons / allowlisted source")),
+                    "license": str(info.get("license", "YouTube source; license not verified")),
                     "artist": str(info.get("uploader", "")),
                     "credit": webpage,
                     "source": "YouTube",
@@ -629,33 +627,153 @@ def generate_ai_image(query: str, dest: Path):
         return None, None
 
 def find_video(query: str, used: set[str], dest: Path):
-    """Try several independent free libraries before optional AI imagery."""
-    providers = (youtube_video,)
-    for provider in providers:
-        try:
-            clip, attribution = provider(query, used, dest)
-            print(f"[MEDIA] {provider.__name__}: {'FOUND' if clip else 'no match'} for {query}", flush=True)
-            if clip:
-                return clip, attribution
-        except Exception as exc:
-            print(f"[MEDIA] {provider.__name__}: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-    # No non-YouTube provider is used: if YouTube has no usable clip, AI may optionally fill the gap.
-    if os.getenv("AI_MODE", "auto").lower() in ("auto", "wan", "ai") and wan_available():
-        try:
-            prompt = ("Photorealistic cinematic science documentary footage, no text, no logos, "
-                      "natural camera movement, realistic lighting: " + query)
-            ai_clip = wan_generate(prompt, dest.with_suffix(".wan.mp4"), seconds=5)
-            if ai_clip:
-                print(f"[MEDIA] Wan2.1: FOUND for {query}", flush=True)
-                return ai_clip, {
-                    "file": f"Wan2.1 AI video: {query}",
-                    "url": "https://github.com/Wan-Video/Wan2.1",
-                    "license": "Wan2.1 model license; generated output subject to model terms",
-                    "artist": "Nova AI generation",
-                    "credit": "Prompt-generated video",
-                    "source": "Wan2.1",
-                    "kind": "ai_generated_video"
-                }
-        except Exception as exc:
-            print(f"[MEDIA] Wan2.1: ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-    return None, None
+    """Use YouTube footage only; no silent AI or third-party fallback."""
+    try:
+        clip, attribution = youtube_video(query, used, dest)
+        print(f"[MEDIA] YouTube: {'FOUND' if clip else 'no match'} for {query}", flush=True)
+        return clip, attribution
+    except Exception as exc:
+        print(f"[MEDIA] YouTube ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
+        return None, None
+
+
+async def _make_voice(text: str, path: Path):
+    words = len(re.findall(r"\\b[\\w'-]+\\b", text))
+    # Aim for roughly 55 seconds while keeping a natural speaking rate.
+    rate = round((words / 145 / (55 / 60) - 1) * 100)
+    rate = max(-10, min(30, rate))
+    communicate = edge_tts.Communicate(text, VOICE, rate=f"{rate:+d}%")
+    await communicate.save(str(path))
+
+
+def _ffprobe_streams(path: Path):
+    raw = subprocess.check_output([
+        "ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)
+    ], text=True)
+    return json.loads(raw)
+
+
+def _render_scene(source: Path, destination: Path, seconds: float):
+    duration = probe_duration(source)
+    if duration < 2:
+        raise RuntimeError(f"Downloaded YouTube source is too short: {source.name}")
+    segment = min(seconds, duration)
+    offset = max(0.0, min(duration - segment, (duration - segment) * 0.27))
+    vf = (
+        f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+        f"crop={W}:{H},setsar=1,fps=30,format=yuv420p"
+    )
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-ss", f"{offset:.3f}", "-i", str(source), "-t", f"{segment:.3f}",
+        "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "20", "-movflags", "+faststart", str(destination)
+    ])
+    return segment
+
+
+def build(slot: int):
+    OUT.mkdir(parents=True, exist_ok=True)
+    topic = TOPICS[slot % len(TOPICS)]
+    slug = re.sub(r"[^a-z0-9]+", "_", topic["title"].lower()).strip("_")[:48]
+    scene_dir = OUT / f"cinematic_{slug}_{slot}"
+    scene_dir.mkdir(parents=True, exist_ok=True)
+
+    narration = " ".join([
+        topic["hook"],
+        *[f"{fact} {detail}" for fact, detail in zip(topic["facts"], topic["details"])]
+    ])
+    voice_path = OUT / f"voice_{slot}.mp3"
+    asyncio.run(_make_voice(narration, voice_path))
+    voice_seconds = probe_duration(voice_path)
+    if not 45 <= voice_seconds <= 64:
+        raise RuntimeError(
+            f"Narration duration outside required 45-64 seconds: {voice_seconds:.1f}s. "
+            "Adjust narration or TTS rate before publishing."
+        )
+
+    segment_seconds = voice_seconds / 5
+    used_ids = set()
+    rendered_scenes = []
+    source_records = []
+
+    for index, query in enumerate(topic["queries"], start=1):
+        source_path = scene_dir / f"youtube_source_{index:02d}.mp4"
+        clip, attribution = find_video(query, used_ids, source_path)
+        if not clip:
+            raise RuntimeError(
+                f"YOUTUBE-ONLY BUILD FAILED: no usable YouTube footage for scene {index}: {query}"
+            )
+        scene_path = scene_dir / f"scene_{index:02d}.mp4"
+        _render_scene(clip, scene_path, segment_seconds)
+        rendered_scenes.append(scene_path)
+        record = dict(attribution or {})
+        record.update({
+            "kind": "youtube_video",
+            "query": query,
+            "scene": index,
+            "source": "YouTube",
+        })
+        source_records.append(record)
+        print(f"[BUILD] Rendered scene {index}/5 from YouTube: {record.get('url', '')}", flush=True)
+
+    concat_file = scene_dir / "scenes.txt"
+    concat_file.write_text(
+        "".join(f"file '{p.resolve().as_posix()}'\\n" for p in rendered_scenes),
+        encoding="utf-8"
+    )
+    silent_video = scene_dir / "joined_scenes.mp4"
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "concat", "-safe", "0", "-i", str(concat_file),
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-an", "-movflags", "+faststart", str(silent_video)
+    ])
+
+    final_video = OUT / f"short_{slot}.mp4"
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", str(silent_video), "-i", str(voice_path),
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+        "-t", f"{voice_seconds:.3f}", "-movflags", "+faststart", str(final_video)
+    ])
+
+    streams = _ffprobe_streams(final_video).get("streams", [])
+    video_stream = next((s for s in streams if s.get("codec_type") == "video"), {})
+    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), {})
+    if (video_stream.get("width"), video_stream.get("height")) != (W, H):
+        raise RuntimeError("Rendered output is not 1080x1920.")
+    if not audio_stream:
+        raise RuntimeError("Rendered output has no narration audio.")
+
+    metadata = {
+        "title": topic["title"],
+        "hook": topic["hook"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "slot": slot,
+        "duration_seconds": round(probe_duration(final_video), 2),
+        "voice_duration_seconds": round(voice_seconds, 2),
+        "resolution": f"{W}x{H}",
+        "visual_type": "five_distinct_animated_scenes",
+        "quality_gate": "passed",
+        "sources": source_records,
+        "narration": narration,
+        "video_file": final_video.name,
+        "note": "YouTube footage sources are recorded for manual rights and attribution review before publication."
+    }
+    metadata_path = OUT / f"short_{slot}.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[BUILD] SUCCESS: {final_video} ({metadata['duration_seconds']}s)", flush=True)
+    return final_video
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Build a cinematic YouTube-footage Short.")
+    parser.add_argument("--slot", type=int, default=0)
+    args = parser.parse_args()
+    build(args.slot)
+
+
+if __name__ == "__main__":
+    main()
