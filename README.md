@@ -17,3 +17,16 @@ The generator rotates through a small set of English educational scripts and ori
 The `Nova Shorts Factory` workflow builds six vertical videos, adds English voice-over and burned-in timed captions, validates the rendered video/audio streams, and uploads both workflow artifacts and downloadable GitHub Release assets. It rotates the topic set between days to reduce immediate repetition. Release assets can be used as public media URLs when scheduling through a connected publishing service.
 
 The factory does **not** itself authenticate to YouTube or TikTok. Publishing is a separate step through the connected Metricool accounts or a properly configured platform API. Never store access tokens in source files; use repository Actions secrets.
+
+
+## Original AI-image long-form documentaries (no Pollinations key)
+
+The long-form pipeline now uses **Tongyi-MAI/Z-Image-Turbo** directly through Diffusers on a free Kaggle GPU notebook. It does not use FLUX, Pollinations, or a paid image-generation API.
+
+1. Open `notebooks/nova-z-image-turbo-kaggle.ipynb` in Kaggle (or import the notebook from this repository).
+2. In Kaggle Notebook settings, enable **Internet** and select **GPU** under Accelerator. Free GPU availability and quotas are controlled by Kaggle; a queue may apply.
+3. Run all cells. The notebook downloads the open Z-Image Turbo model, generates 15 original 1024×576 images, and creates `nova_ai_frames.zip`.
+4. Download that ZIP and upload it to this repository at `input/ai_frames.zip` (create the `input` folder if needed).
+5. The **Nova AI Image Documentary Render** workflow starts automatically. It creates the five-minute 1080p video, English voice-over, animated camera movement, and synchronized coloured captions. Download the MP4 from the workflow Artifacts.
+
+The Kaggle GPU stage is the only step that needs a GPU. GitHub Actions performs the final video assembly on a CPU runner. No API key or paid API is required; Kaggle's free GPU quota and availability are not guaranteed. The render workflow refuses to substitute stock images: it verifies that all 15 scenes came from Z-Image Turbo.
