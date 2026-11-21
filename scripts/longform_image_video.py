@@ -60,53 +60,65 @@ def ai_image(prompt: str, dest: Path, seed: int):
         dest.unlink(missing_ok=True)
         return None
 
+def query_variants(query: str):
+    # Avoid sending long cinematic prompts to catalog search engines.
+    words = re.findall(r"[a-zA-Z]{3,}", query.lower())
+    stop = {"underwater","cinematic","documentary","detailed","natural","history","photorealistic","deep","sea","ocean"}
+    useful = [w for w in words if w not in stop]
+    variants = [" ".join(useful[:3]), " ".join(useful[:2]), "ocean underwater", "marine life"]
+    return list(dict.fromkeys(q for q in variants if q.strip()))
+
 def nasa_image(query: str, dest: Path, used: set[str]):
-    try:
-        data = requests.get("https://images-api.nasa.gov/search", params={"q":query,"media_type":"image","page_size":30}, headers={"User-Agent":UA}, timeout=30).json()
-        for item in (data.get("collection") or {}).get("items") or []:
-            meta = (item.get("data") or [{}])[0]
-            nasa_id = meta.get("nasa_id")
-            links = item.get("links") or []
-            url = next((x.get("href") for x in links if x.get("rel")=="preview" and x.get("href")), None)
-            if not url or nasa_id in used:
-                continue
-            try:
-                r = requests.get(url, headers={"User-Agent":UA}, timeout=90)
-                r.raise_for_status()
-                if len(r.content) < 20000: continue
-                dest.write_bytes(r.content)
-                with Image.open(dest) as im: im.verify()
-                used.add(nasa_id)
-                return {"source":"NASA Image and Video Library","title":meta.get("title",""),"nasa_id":nasa_id,"url":url,"credit":"NASA"}
-            except Exception:
-                dest.unlink(missing_ok=True)
-    except Exception as exc:
-        print(f"[IMAGE] NASA search failed: {str(exc)[:120]}", flush=True)
+    for term in query_variants(query):
+        try:
+            response = requests.get("https://images-api.nasa.gov/search", params={"q":term,"media_type":"image","page_size":30}, headers={"User-Agent":UA}, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            for item in (data.get("collection") or {}).get("items") or []:
+                meta = (item.get("data") or [{}])[0]
+                nasa_id = meta.get("nasa_id")
+                links = item.get("links") or []
+                url = next((x.get("href") for x in links if x.get("rel")=="preview" and x.get("href")), None)
+                if not url or nasa_id in used: continue
+                try:
+                    r = requests.get(url, headers={"User-Agent":UA}, timeout=90); r.raise_for_status()
+                    if len(r.content) < 12000: continue
+                    dest.write_bytes(r.content)
+                    with Image.open(dest) as im: im.verify()
+                    used.add(nasa_id)
+                    return {"source":"NASA Image and Video Library","title":meta.get("title",""),"nasa_id":nasa_id,"url":url,"credit":"NASA"}
+                except Exception:
+                    dest.unlink(missing_ok=True)
+        except Exception as exc:
+            print(f"[IMAGE] NASA search '{term}' failed: {type(exc).__name__}: {str(exc)[:100]}", flush=True)
     return None
 
 def commons_image(query: str, dest: Path, used: set[str]):
     api="https://commons.wikimedia.org/w/api.php"
-    try:
-        data=requests.get(api,params={"action":"query","format":"json","generator":"search","gsrsearch":query+" filetype:bitmap","gsrnamespace":6,"gsrlimit":20,"prop":"imageinfo","iiprop":"url|extmetadata","iiurlwidth":1920},headers={"User-Agent":UA},timeout=30).json()
-        pages=(data.get("query") or {}).get("pages") or {}
-        for page in pages.values():
-            info=(page.get("imageinfo") or [{}])[0]
-            url=info.get("thumburl") or info.get("url")
-            if not url or url in used: continue
-            try:
-                r=requests.get(url,headers={"User-Agent":UA},timeout=90); r.raise_for_status()
-                if len(r.content)<20000: continue
-                dest.write_bytes(r.content)
-                with Image.open(dest) as im: im.verify()
-                meta=info.get("extmetadata") or {}
-                def val(k):
-                    return re.sub("<[^>]+>","",str((meta.get(k) or {}).get("value",""))).strip()
-                used.add(url)
-                return {"source":"Wikimedia Commons","title":page.get("title",""),"url":url,"artist":val("Artist"),"license":val("LicenseShortName")}
-            except Exception:
-                dest.unlink(missing_ok=True)
-    except Exception as exc:
-        print(f"[IMAGE] Wikimedia search failed: {str(exc)[:120]}", flush=True)
+    for term in query_variants(query):
+        try:
+            params={"action":"query","format":"json","generator":"search","gsrsearch":term+" filetype:bitmap","gsrnamespace":6,"gsrlimit":30,"prop":"imageinfo","iiprop":"url|extmetadata","iiurlwidth":1920}
+            response=requests.get(api,params=params,headers={"User-Agent":UA},timeout=35)
+            response.raise_for_status()
+            pages=(response.json().get("query") or {}).get("pages") or {}
+            for page in pages.values():
+                info=(page.get("imageinfo") or [{}])[0]
+                url=info.get("thumburl") or info.get("url")
+                if not url or url in used: continue
+                try:
+                    r=requests.get(url,headers={"User-Agent":UA},timeout=90); r.raise_for_status()
+                    if len(r.content)<12000: continue
+                    dest.write_bytes(r.content)
+                    with Image.open(dest) as im: im.verify()
+                    meta=info.get("extmetadata") or {}
+                    def val(k):
+                        return re.sub("<[^>]+>","",str((meta.get(k) or {}).get("value",""))).strip()
+                    used.add(url)
+                    return {"source":"Wikimedia Commons","title":page.get("title",""),"url":url,"artist":val("Artist"),"license":val("LicenseShortName")}
+                except Exception:
+                    dest.unlink(missing_ok=True)
+        except Exception as exc:
+            print(f"[IMAGE] Wikimedia search '{term}' failed: {type(exc).__name__}: {str(exc)[:100]}", flush=True)
     return None
 
 def fit_image(path: Path):
@@ -176,7 +188,7 @@ def main():
         if not metadata:
             metadata=commons_image(visual,dest,used)
         if not metadata:
-            raise RuntimeError(f"No image source succeeded for scene {i}: {title}. Configure POLLINATIONS_API_KEY or retry the public image sources.")
+            raise RuntimeError(f"No public image source returned a usable image for scene {i}: {title}. Check the runner network or source availability.")
         fit_image(dest)
         images.append(dest)
         records.append({"scene":i,"title":title,"prompt":prompt,**metadata})
