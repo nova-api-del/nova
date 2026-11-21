@@ -3,7 +3,6 @@ on:
   push:
     paths:
       - 'input/ai_frames.zip'
-      - 'scripts/longform_image_video.py'
       - '.github/workflows/compose-ai-documentary.yml'
   workflow_dispatch:
 permissions:
