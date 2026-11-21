@@ -1,0 +1,64 @@
+name: Nova AI Image Documentary Render
+on:
+  push:
+    paths:
+      - 'input/ai_frames.zip'
+      - 'scripts/longform_image_video.py'
+      - '.github/workflows/compose-ai-documentary.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for generated AI frames
+        run: |
+          test -f input/ai_frames.zip || {
+            echo "::error::Missing input/ai_frames.zip. Generate it with notebooks/nova-z-image-turbo-kaggle.ipynb, then upload the ZIP to input/ai_frames.zip in this repository."
+            exit 1
+          }
+      - name: Extract AI-generated frames
+        run: |
+          mkdir -p input/ai_frames
+          python -m zipfile -e input/ai_frames.zip input/ai_frames
+          test "$(find input/ai_frames -maxdepth 1 -type f -name 'scene_*' | wc -l)" -ge 15
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install FFmpeg and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install Python requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-shorts.txt pillow edge-tts requests
+      - name: Render five-minute video from original AI images
+        env:
+          AI_FRAMES_DIR: input/ai_frames
+          REQUIRE_AI_IMAGES: 'true'
+        run: |
+          rm -rf output/longform
+          python scripts/longform_image_video.py
+      - name: Validate MP4 and confirm every scene is AI-generated
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          p='output/longform/nova_five_minute_documentary.mp4'
+          d=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',p],text=True))
+          streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',p],text=True))['streams']
+          meta=json.load(open('output/longform/metadata.json'))
+          assert 270 <= d <= 330, d
+          assert any(s.get('codec_type')=='video' and s.get('width')==1920 and s.get('height')==1080 for s in streams)
+          assert any(s.get('codec_type')=='audio' for s in streams)
+          assert meta['ai_generated_images']==15, meta['ai_generated_images']
+          print('PASS:', round(d,2), 'seconds; AI images:', meta['ai_generated_images'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-five-minute-ai-documentary-${{ github.run_number }}
+          path: output/longform/
+          retention-days: 14
