@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a five-minute English documentary from AI images (Z-Image Turbo) or licensed stills."""
+"""Render a five-minute documentary using Z-Image Turbo frames or licensed stills."""
 from __future__ import annotations
 import asyncio, json, math, os, re, subprocess, time
 from pathlib import Path
@@ -12,8 +12,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output" / "longform"
-API_KEY = os.getenv("POLLINATIONS_API_KEY", "").strip()
-IMAGE_MODEL = os.getenv("POLLINATIONS_IMAGE_MODEL", "tongyi-mai/z-image-turbo").strip()
+AI_FRAMES_DIR = Path(os.getenv("AI_FRAMES_DIR", str(ROOT / "input" / "ai_frames")))
+REQUIRE_AI_IMAGES = os.getenv("REQUIRE_AI_IMAGES", "false").lower() == "true"
 VOICE = os.getenv("TTS_VOICE", "en-US-GuyNeural")
 UA = "NovaLongformDocumentary/1.0 (educational video)"
 
@@ -181,14 +181,20 @@ def main():
     for i,(title,paragraph,visual) in enumerate(SCENES,1):
         dest=OUT/f"scene_{i:02d}.jpg"
         prompt=("Photorealistic premium natural history documentary still, cinematic IMAX photography, 16:9 widescreen, highly detailed, physically realistic lighting, rich but natural colors, no text, no labels, no watermark. Scene: "+visual+".")
-        metadata=ai_image(prompt,dest,26000+i)
-        if metadata: ai_count+=1
-        if not metadata:
+        ai_source = next((p for p in [AI_FRAMES_DIR / f"scene_{i:02d}.png", AI_FRAMES_DIR / f"scene_{i:02d}.jpg", AI_FRAMES_DIR / f"scene_{i:02d}.webp"] if p.is_file()), None)
+        if ai_source:
+            with Image.open(ai_source) as im:
+                im.convert("RGB").save(dest, "JPEG", quality=95)
+            metadata={"source":"Z-Image-Turbo (Kaggle GPU)","model":"Tongyi-MAI/Z-Image-Turbo","prompt":prompt}
+            ai_count+=1
+        elif REQUIRE_AI_IMAGES:
+            raise RuntimeError(f"Missing AI-generated image for scene {i}: {title}. Generate the 15 frames with the Kaggle notebook and place them in input/ai_frames/.")
+        else:
             metadata=nasa_image(visual,dest,used)
-        if not metadata:
-            metadata=commons_image(visual,dest,used)
-        if not metadata:
-            raise RuntimeError(f"No public image source returned a usable image for scene {i}: {title}. Check the runner network or source availability.")
+            if not metadata:
+                metadata=commons_image(visual,dest,used)
+            if not metadata:
+                raise RuntimeError(f"No public image source returned a usable image for scene {i}: {title}.")
         fit_image(dest)
         images.append(dest)
         records.append({"scene":i,"title":title,"prompt":prompt,**metadata})
