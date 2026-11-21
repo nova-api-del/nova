@@ -1,56 +1,17 @@
-name: Nova Five Minute Image Documentary
+name: Legacy Five Minute Documentary (manual only)
 on:
-  push:
-    paths:
-      - 'scripts/longform_image_video.py'
-      - '.github/workflows/longform-image-video.yml'
   workflow_dispatch:
     inputs:
-      ai_images:
-        description: "Use AI image generation when POLLINATIONS_API_KEY is configured"
+      note:
+        description: "Legacy source-image renderer. For original AI-generated images, use Nova AI Image Documentary Render instead."
         required: false
-        default: "auto"
+        default: "Use the Kaggle Z-Image Turbo notebook and compose-ai-documentary workflow."
 permissions:
   contents: read
 jobs:
-  render:
+  legacy:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install FFmpeg and fonts
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
-      - name: Install Python requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-shorts.txt
-          pip install pillow edge-tts requests
-      - name: Render five-minute English documentary
-        env:
-          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
-          POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
-        run: |
-          rm -rf output/longform
-          python scripts/longform_image_video.py
-      - name: Validate MP4 duration, video and audio
-        run: |
-          python - <<'PY'
-          import json, subprocess
-          p='output/longform/nova_five_minute_documentary.mp4'
-          d=float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',p],text=True))
-          streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',p],text=True))['streams']
-          assert 270 <= d <= 330, d
-          assert any(s.get('codec_type')=='video' and s.get('width')==1920 and s.get('height')==1080 for s in streams)
-          assert any(s.get('codec_type')=='audio' for s in streams)
-          print('PASS', round(d,2), 'seconds')
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nova-five-minute-documentary-${{ github.run_number }}
-          path: output/longform/
-          retention-days: 14
+      - run: |
+          echo "::error::This legacy workflow is disabled for production. Use notebooks/nova-z-image-turbo-kaggle.ipynb, then upload input/ai_frames.zip to trigger Nova AI Image Documentary Render."
+          exit 1
