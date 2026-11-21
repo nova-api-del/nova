@@ -3,7 +3,6 @@
 from __future__ import annotations
 import asyncio, json, math, os, re, subprocess, time
 from pathlib import Path
-from urllib.parse import quote
 from datetime import datetime, timezone
 
 import requests
@@ -40,25 +39,6 @@ def run(cmd):
 
 def probe(path):
     return float(subprocess.check_output(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(path)], text=True).strip())
-
-def ai_image(prompt: str, dest: Path, seed: int):
-    if not API_KEY:
-        return None
-    url = "https://gen.pollinations.ai/image/" + quote(prompt, safe="")
-    params = {"model": IMAGE_MODEL, "width": 1536, "height": 864, "seed": seed, "nologo": "true"}
-    try:
-        response = requests.get(url, params=params, headers={"Authorization": "Bearer " + API_KEY, "User-Agent": UA}, timeout=240)
-        response.raise_for_status()
-        if not response.headers.get("content-type","").startswith("image/") or len(response.content) < 50000:
-            raise RuntimeError("image API returned an invalid or very small file")
-        dest.write_bytes(response.content)
-        with Image.open(dest) as im:
-            im.verify()
-        return {"source":"Pollinations AI","model":IMAGE_MODEL,"prompt":prompt}
-    except Exception as exc:
-        print(f"[IMAGE] AI generation failed for {dest.name}: {type(exc).__name__}: {str(exc)[:180]}", flush=True)
-        dest.unlink(missing_ok=True)
-        return None
 
 def query_variants(query: str):
     # Avoid sending long cinematic prompts to catalog search engines.
