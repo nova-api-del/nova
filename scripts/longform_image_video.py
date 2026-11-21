@@ -152,10 +152,10 @@ def write_ass(words, path):
         rows.append(f"Dialogue: 0,{ass_time(group[0][0])},{ass_time(group[-1][1]+.12)},Nova,,0,0,0,,{' '.join(rendered)}")
     path.write_text("\n".join(rows)+"\n",encoding="utf-8")
 
-def get_word_boundaries(text, audio):
+def get_word_boundaries(text, audio, rate):
     async def collect():
         words=[]
-        comm=edge_tts.Communicate(text,VOICE,rate="-15%")
+        comm=edge_tts.Communicate(text,VOICE,rate=rate)
         async for chunk in comm.stream():
             if chunk["type"]=="WordBoundary":
                 words.append((chunk["offset"]/10_000_000,(chunk["offset"]+chunk["duration"])/10_000_000,chunk["text"]))
@@ -197,7 +197,7 @@ def main():
     if duration > 330:
         raise RuntimeError(f"Narration is {duration:.1f}s; shorten the script before rendering.")
 
-    words=get_word_boundaries(narration,audio)
+    words=get_word_boundaries(narration,audio,chosen_rate)
     ass=OUT/"captions.ass"; write_ass(words,ass)
     scene_durations=[duration/len(SCENES)]*len(SCENES)
     segments=[]
