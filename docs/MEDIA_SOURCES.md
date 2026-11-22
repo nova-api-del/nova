@@ -32,3 +32,9 @@ No key is required for NASA, Wikimedia Commons, or Internet Archive. Never put A
 - At most two AI-generated stills may be animated into moving scenes.
 - Source URL, source/provider, license information, and attribution are retained in each Short's JSON metadata.
 - Missing/invalid downloads are rejected before editing.
+
+## No YouTube downloads
+
+Nova no longer downloads footage from YouTube (no `yt-dlp`, no `YOUTUBE_COOKIES` secret). Reusing other creators' videos violates YouTube's terms, risks copyright strikes, and makes a channel ineligible for monetization ("reused content"). `cinematic_shorts.py` now uses licensed sources only: NASA, Pixabay, Pexels, Internet Archive (CC/PD only) and Wikimedia Commons. If no licensed video exists for a scene, up to two scenes per Short may use a licensed still image with a camera move; otherwise the build fails instead of using unlicensed material.
+
+The `YOUTUBE_COOKIES` secret is no longer used. You can delete it from Settings → Secrets and variables → Actions.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a real-footage-first Nova Short. No text-card fallback is allowed."""
+"""Build a real-footage-first Nova Short from licensed sources. No YouTube downloads."""
 from __future__ import annotations
 import argparse, asyncio, json, os, re, subprocess
 from urllib.parse import quote
@@ -304,139 +304,6 @@ def commons_video(query: str, used: set[str], dest: Path):
             continue
     return None, None
 
-def youtube_video(query: str, used: set[str], dest: Path):
-    """Search YouTube, then try several individual results until one downloads."""
-    import shutil
-    ytdlp = shutil.which("yt-dlp")
-    if not ytdlp:
-        print("[MEDIA] yt-dlp executable is missing", flush=True)
-        return None, None
-
-    common = [ytdlp, "--no-warnings", "--ignore-errors", "--no-progress",
-              "--js-runtimes", "node", "--remote-components", "ejs:github"]
-    # GitHub Actions injects the secret as an environment variable; never commit cookies.
-    cookies_text = os.environ.get("YOUTUBE_COOKIES", "").strip()
-    if cookies_text:
-        import atexit, tempfile
-        cookie_file = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="nova-youtube-", suffix=".txt", delete=False)
-        try:
-            cookie_file.write(cookies_text)
-            cookie_file.close()
-            os.chmod(cookie_file.name, 0o600)
-            common += ["--cookies", cookie_file.name]
-            atexit.register(lambda p=cookie_file.name: Path(p).unlink(missing_ok=True))
-            print("[MEDIA] YouTube session cookies loaded from GitHub Secret", flush=True)
-        except Exception:
-            cookie_file.close()
-            Path(cookie_file.name).unlink(missing_ok=True)
-            raise
-    else:
-        print("[MEDIA] YOUTUBE_COOKIES secret is not configured; trying anonymous YouTube access", flush=True)
-    try:
-        search_cmd = common + ["--flat-playlist", "--dump-single-json", f"ytsearch15:{query}"]
-        search_proc = subprocess.run(search_cmd, capture_output=True, text=True, timeout=120)
-        if search_proc.returncode != 0 or not search_proc.stdout.strip():
-            print(
-                f"[MEDIA] YouTube search failed for {query}: "
-                f"{search_proc.stderr[-900:]}",
-                flush=True
-            )
-            return None, None
-        try:
-            search_data = json.loads(search_proc.stdout)
-        except json.JSONDecodeError:
-            print(f"[MEDIA] YouTube returned invalid search JSON for {query}: {search_proc.stdout[-500:]}", flush=True)
-            return None, None
-
-        entries = search_data.get("entries") or []
-        print(f"[MEDIA] YouTube search results for {query}: {len(entries)}", flush=True)
-        for entry in entries[:12]:
-            video_id = str(entry.get("id") or "")
-            if not video_id or video_id in used:
-                continue
-            duration = entry.get("duration")
-            if duration is not None and float(duration) < 5:
-                continue
-            webpage = str(entry.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}")
-            outtmpl = str(dest.with_suffix(".%(ext)s"))
-            for old_file in dest.parent.glob(dest.stem + ".*"):
-                if old_file.is_file():
-                    old_file.unlink(missing_ok=True)
-
-            clip = None
-            proc = None
-            info = {}
-            # Data-center IPs can be challenged by YouTube's default web client.
-            # Try clients that do not require a logged-in browser session first.
-            for player_client in ("android_vr", "web_embedded", "tv"):
-                download_cmd = common + [
-                    "--extractor-args", f"youtube:player_client={player_client}",
-                    "--no-playlist", "--max-filesize", "120M",
-                    "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]",
-                    "--merge-output-format", "mp4", "-o", outtmpl, "--print-json", webpage
-                ]
-                proc = subprocess.run(download_cmd, capture_output=True, text=True, timeout=240)
-                files = sorted(
-                    [p for p in dest.parent.glob(dest.stem + ".*")
-                     if p.suffix.lower() in (".mp4", ".webm", ".mkv", ".mov")],
-                    key=lambda p: p.stat().st_mtime,
-                    reverse=True
-                )
-                clip = next((p for p in files if p.exists() and p.stat().st_size > 100_000), None)
-                if clip:
-                    for line in reversed(proc.stdout.splitlines()):
-                        try:
-                            candidate = json.loads(line)
-                            if candidate.get("id"):
-                                info = candidate
-                                break
-                        except Exception:
-                            continue
-                    print(f"[MEDIA] YouTube downloaded {video_id} using {player_client}", flush=True)
-                    break
-                print(
-                    f"[MEDIA] YouTube {video_id} via {player_client}: "
-                    f"{proc.stderr[-300:]}",
-                    flush=True
-                )
-            if not clip:
-                print(
-                    f"[MEDIA] YouTube candidate {video_id} unavailable: "
-                    f"{proc.stderr[-450:]}",
-                    flush=True
-                )
-                continue
-
-            info = {}
-            for line in reversed(proc.stdout.splitlines()):
-                try:
-                    candidate = json.loads(line)
-                    if candidate.get("id"):
-                        info = candidate
-                        break
-                except Exception:
-                    continue
-            used.add(video_id)
-            return clip, {
-                "file": str(info.get("title") or entry.get("title") or query),
-                "url": str(info.get("webpage_url") or webpage),
-                "license": str(info.get("license") or "YouTube source; license not verified"),
-                "artist": str(info.get("uploader") or entry.get("uploader") or ""),
-                "credit": str(info.get("webpage_url") or webpage),
-                "source": "YouTube",
-                "source_id": video_id
-            }
-    except Exception as exc:
-        print(f"[MEDIA] YouTube error for {query}: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-    return None, None
-
-def find_video(query: str, used: set[str], dest: Path):
-    clip, attribution = nasa_video(query, used, dest)
-    if clip:
-        return clip, attribution
-    return commons_video(query, used, dest)
-
-
 def pixabay_video(query: str, used: set[str], dest: Path):
     """Pixabay free API (requires a user API key); videos are downloaded, never hotlinked."""
     key = os.getenv("PIXABAY_API_KEY")
@@ -702,14 +569,24 @@ def generate_ai_image(query: str, dest: Path):
         return None, None
 
 def find_video(query: str, used: set[str], dest: Path):
-    """Use YouTube footage only; no silent AI or third-party fallback."""
-    try:
-        clip, attribution = youtube_video(query, used, dest)
-        print(f"[MEDIA] YouTube: {'FOUND' if clip else 'no match'} for {query}", flush=True)
-        return clip, attribution
-    except Exception as exc:
-        print(f"[MEDIA] YouTube ERROR {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-        return None, None
+    """Find reusable, licensed footage only. No downloads from YouTube.
+
+    Order: NASA -> Pixabay -> Pexels -> Internet Archive (CC/PD only) -> Wikimedia Commons.
+    Pixabay and Pexels are skipped automatically when their API key is not configured.
+    """
+    for provider in (nasa_video, pixabay_video, pexels_video, archive_video, commons_video):
+        try:
+            clip, attribution = provider(query, used, dest)
+        except Exception as exc:
+            print(f"[MEDIA] {provider.__name__} ERROR {type(exc).__name__}: {str(exc)[:200]}", flush=True)
+            continue
+        if clip:
+            print(f"[MEDIA] {provider.__name__}: FOUND for {query}", flush=True)
+            attribution = dict(attribution or {})
+            attribution.setdefault("source", provider.__name__.replace("_video", "").title())
+            return clip, attribution
+        print(f"[MEDIA] {provider.__name__}: no match for {query}", flush=True)
+    return None, None
 
 
 async def _make_voice(text: str, path: Path):
@@ -772,7 +649,7 @@ def _ffprobe_streams(path: Path):
 def _render_scene(source: Path, destination: Path, seconds: float):
     duration = probe_duration(source)
     if duration < 2:
-        raise RuntimeError(f"Downloaded YouTube source is too short: {source.name}")
+        raise RuntimeError(f"Downloaded source clip is too short: {source.name}")
     segment = min(seconds, duration)
     offset = max(0.0, min(duration - segment, (duration - segment) * 0.27))
     vf = (
@@ -786,6 +663,22 @@ def _render_scene(source: Path, destination: Path, seconds: float):
         "-crf", "20", "-movflags", "+faststart", str(destination)
     ])
     return segment
+
+
+def _render_image_scene(source: Path, destination: Path, seconds: float):
+    """Animate a licensed still with a slow push-in so it counts as a moving scene."""
+    frames = max(1, round(seconds * 30))
+    vf = (
+        f"scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2},"
+        f"zoompan=z='min(zoom+0.0007,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        f":d={frames}:s={W}x{H}:fps=30,setsar=1,format=yuv420p"
+    )
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-loop", "1", "-i", str(source), "-t", f"{seconds:.3f}",
+        "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "20", "-movflags", "+faststart", str(destination)
+    ])
 
 
 def build(slot: int):
@@ -813,25 +706,32 @@ def build(slot: int):
     rendered_scenes = []
     source_records = []
 
+    still_scenes = 0
     for index, query in enumerate(topic["queries"], start=1):
-        source_path = scene_dir / f"youtube_source_{index:02d}.mp4"
-        clip, attribution = find_video(query, used_ids, source_path)
-        if not clip:
-            raise RuntimeError(
-                f"YOUTUBE-ONLY BUILD FAILED: no usable YouTube footage for scene {index}: {query}"
-            )
+        source_path = scene_dir / f"source_{index:02d}.mp4"
         scene_path = scene_dir / f"scene_{index:02d}.mp4"
-        _render_scene(clip, scene_path, segment_seconds)
+        clip, attribution = find_video(query, used_ids, source_path)
+        if clip:
+            _render_scene(clip, scene_path, segment_seconds)
+            record = dict(attribution or {})
+            record.update({"kind": "licensed_video", "query": query, "scene": index})
+        else:
+            # Fallback: a licensed still image with a camera move (max 2 per Short).
+            if still_scenes >= 2:
+                raise RuntimeError(
+                    f"BUILD FAILED: no licensed footage for scene {index}: {query} "
+                    "(still-image fallback limit of 2 reached)"
+                )
+            image, attribution = find_image(query, used_ids, scene_dir / f"still_{index:02d}")
+            if not image:
+                raise RuntimeError(f"BUILD FAILED: no licensed footage or image for scene {index}: {query}")
+            _render_image_scene(image, scene_path, segment_seconds)
+            still_scenes += 1
+            record = dict(attribution or {})
+            record.update({"kind": "licensed_image_animated", "query": query, "scene": index})
         rendered_scenes.append(scene_path)
-        record = dict(attribution or {})
-        record.update({
-            "kind": "youtube_video",
-            "query": query,
-            "scene": index,
-            "source": "YouTube",
-        })
         source_records.append(record)
-        print(f"[BUILD] Rendered scene {index}/5 from YouTube: {record.get('url', '')}", flush=True)
+        print(f"[BUILD] Rendered scene {index}/5 ({record['kind']}): {record.get('url', '')}", flush=True)
 
     concat_file = scene_dir / "scenes.txt"
     concat_file.write_text(
@@ -878,7 +778,7 @@ def build(slot: int):
         "sources": source_records,
         "narration": narration,
         "video_file": final_video.name,
-        "note": "YouTube footage sources are recorded for manual rights and attribution review before publication."
+        "note": "Only licensed sources are used (NASA, Pixabay, Pexels, Internet Archive CC/PD, Wikimedia Commons). Credits are recorded in sources; include attribution where the license requires it."
     }
     metadata_path = OUT / f"short_{slot}.json"
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -887,7 +787,7 @@ def build(slot: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build a cinematic YouTube-footage Short.")
+    parser = argparse.ArgumentParser(description="Build a cinematic Short from licensed footage.")
     parser.add_argument("--slot", type=int, default=0)
     args = parser.parse_args()
     build(args.slot)
