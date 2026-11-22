@@ -71,6 +71,33 @@ def fetch(url, dest):
         data=response.read()
     if len(data)<10000: raise RuntimeError(f"Downloaded asset too small: {dest.name}")
     dest.write_bytes(data)
+
+def fallback_scene(index, dest):
+    """Create a durable original illustrated frame when a temporary AI URL expires."""
+    img=Image.new("RGB",(W,H),(231,205,157)); d=ImageDraw.Draw(img)
+    palettes=[((215,174,111),(241,221,176)),((197,155,96),(228,203,151)),((177,133,81),(219,191,137)),((151,112,72),(201,170,116))]
+    sky,sand=palettes[(index-1)//3 % len(palettes)]
+    d.rectangle((0,0,W,H*0.62),fill=sky); d.rectangle((0,H*0.62,W,H),fill=sand)
+    # distant dunes
+    for k in range(5):
+        y=H*0.60+k*70
+        pts=[(0,y),(280,y-130),(620,y+5),(950,y-150),(1350,y-10),(1680,y-125),(W,y+10),(W,H),(0,H)]
+        d.polygon(pts,fill=tuple(max(0,c-12*k) for c in sand))
+    # single recurring adventurer: fixed silhouette proportions, changing pose/position only
+    cx=480+index*75; cy=650+int(35*math.sin(index));
+    d.ellipse((cx-48,cy-165,cx+48,cy-69),fill=(57,43,35))
+    d.polygon([(cx-82,cy-58),(cx+82,cy-58),(cx+110,cy+170),(cx-105,cy+170)],fill=(45,58,65))
+    d.line((cx-35,cy+168,cx-78,cy+300),fill=(37,34,31),width=34); d.line((cx+35,cy+168,cx+78,cy+300),fill=(37,34,31),width=34)
+    d.line((cx-68,cy+5,cx-175,cy+110),fill=(45,58,65),width=28); d.line((cx+68,cy+5,cx+155,cy+90),fill=(45,58,65),width=28)
+    # backpack and water bottle, recurring visual identifiers
+    d.rounded_rectangle((cx+58,cy-42,cx+132,cy+120),radius=18,fill=(91,70,48))
+    d.rounded_rectangle((cx-205,cy+65,cx-170,cy+155),radius=10,fill=(108,154,176))
+    labels=["WAKE UP","SCOUTING","HEAT","SHELTER","STORM","DRY RIVER","TRACKS","WATER","OASIS","RIDGE","ROAD","TOMORROW"]
+    try: font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",48)
+    except Exception: font=ImageFont.load_default()
+    text=labels[index-1]
+    d.rounded_rectangle((70,70,570,150),radius=20,fill=(0,0,0,150)); d.text((100,88),text,font=font,fill=(255,255,255))
+    dest.parent.mkdir(parents=True,exist_ok=True); img.save(dest)
 def ass_time(t):
     cs=round(t*100); h=cs//360000; m=(cs//6000)%60; s=(cs//100)%60; c=cs%100
     return f"{h}:{m:02d}:{s:02d}.{c:02d}"
@@ -105,11 +132,21 @@ def main():
     for i,url in enumerate(IMAGE_URLS,1):
         p=ASSETS/f"scene_{i:02d}.png"
         if not p.exists():
-            print(f"Downloading scene {i}/{len(IMAGE_URLS)}",flush=True); fetch(url,p)
+            print(f"Downloading scene {i}/{len(IMAGE_URLS)}",flush=True)
+            try:
+                fetch(url,p)
+            except Exception as exc:
+                print(f"Temporary AI asset unavailable ({exc}); generating durable fallback scene {i}",flush=True)
+                fallback_scene(i,p)
         images.append(p)
     audio=ASSETS/"narration.wav"
     if not audio.exists():
-        print("Downloading narration",flush=True); fetch(AUDIO_URL,audio)
+        print("Downloading narration",flush=True)
+        try:
+            fetch(AUDIO_URL,audio)
+        except Exception as exc:
+            print(f"HeyGen narration unavailable ({exc}); generating local narration fallback",flush=True)
+            subprocess.run(["bash","-lc",f"printf %s {json.dumps(NARRATION)} | espeak-ng -w {audio} -v en-us -s 145"],check=True)
     # Twelve unique illustrations, each featuring the same single recurring hero.
     sequence=images
     clip_duration=TOTAL/len(sequence)
