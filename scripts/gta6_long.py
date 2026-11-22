@@ -6,8 +6,8 @@ import sys, re, json, asyncio, os
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cinematic_shorts as cs
 
-# Warm, conversational neural narration.
-cs.VOICE = os.getenv("GTA6_LONG_VOICE", "en-US-AndrewNeural")
+# Natural, warm conversational neural narration (Christopher).
+cs.VOICE = os.getenv("GTA6_LONG_VOICE", "en-US-ChristopherNeural")
 
 TOPIC = {
     "title": "GTA 6: The Biggest Details Hidden in Vice City",
