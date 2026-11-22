@@ -44,3 +44,5 @@ jobs:
           name: nova-desert-five-minute-preview-${{ github.run_number }}
           path: output/story_episode_5min/*
           retention-days: 14
+
+# trigger: render current fixed fallback-based preview
