@@ -1,4 +1,5 @@
 name: Nova Five-Minute Illustrated Story Preview
+# Manual verification trigger for the current renderer.
 on:
   push:
     paths:
