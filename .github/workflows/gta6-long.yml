@@ -1,0 +1,85 @@
+name: Nova GTA 6 Long Video Factory
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/gta6_long.py"
+      - ".github/workflows/gta6-long.yml"
+      - "scripts/cinematic_shorts.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-gta6-long
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+      POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          github-token: ${{ github.token }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          pip install --disable-pip-version-check -r requirements-shorts.txt
+      - name: Build 8-11 minute GTA 6 video
+        run: |
+          rm -rf output
+          mkdir -p output
+          python scripts/gta6_long.py
+      - name: Validate long video
+        run: |
+          python - <<'PY'
+          import glob,json,subprocess
+          files=glob.glob("output/gta6_long_*.json")
+          if not files: raise SystemExit("No GTA6 metadata")
+          m=json.load(open(files[0]))
+          d=float(m.get("duration_seconds",0))
+          if not 480 <= d <= 660: raise SystemExit(f"duration failed: {d}s")
+          if m.get("scene_count") != 30: raise SystemExit("scene count failed")
+          if m.get("quality_gate") != "passed": raise SystemExit("quality gate failed")
+          mp4=glob.glob("output/gta6_long_*.mp4")[0]
+          r=subprocess.run(["ffprobe","-v","error","-show_entries","stream=codec_type,width,height","-of","json",mp4],capture_output=True,text=True)
+          streams=json.loads(r.stdout)["streams"]
+          v=next((s for s in streams if s.get("codec_type")=="video"),{})
+          if (v.get("width"),v.get("height"))!=(1080,1920) or not any(s.get("codec_type")=="audio" for s in streams):
+              raise SystemExit("format failed")
+          print(f"PASS: {d:.1f}s, 30 scenes, 1080x1920 + audio")
+          PY
+      - name: Upload final video
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-gta6-long-${{ github.run_number }}
+          path: output/gta6_long_*.mp4
+          retention-days: 7
+      - name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-gta6-long-metadata-${{ github.run_number }}
+          path: output/gta6_long_*.json
+          retention-days: 7
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nova-gta6-long-${{ github.run_number }}
+          name: Nova GTA 6 Long Video ${{ github.run_number }}
+          files: |
+            output/gta6_long_*.mp4
+            output/gta6_long_*.json
+          generate_release_notes: false
