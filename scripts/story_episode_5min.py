@@ -180,3 +180,5 @@ def main():
     (OUT/"metadata.json").write_text(json.dumps(meta,indent=2),encoding="utf-8")
     print(json.dumps(meta,indent=2))
 if __name__=="__main__": main()
+
+# Re-trigger preview using the fallback-enabled renderer.
