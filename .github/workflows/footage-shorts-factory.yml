@@ -27,6 +27,7 @@ jobs:
       COUNT: ${{ github.event.inputs.count || '1' }}
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
       POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
     steps:
