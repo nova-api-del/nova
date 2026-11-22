@@ -92,6 +92,26 @@ def render_scene(index: int, image: Path, mp3: Path, ass: Path, dest: Path, seco
          "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-t", f"{seconds:.3f}", str(dest)])
 
 
+def make_pingpong(src: Path, dst: Path):
+    """Forward-then-backward copy of a short clip so looping it has no visible jump."""
+    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src),
+         "-filter_complex", "[0:v]reverse[r];[0:v][r]concat=n=2:v=1:a=0[v]",
+         "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+         "-pix_fmt", "yuv420p", str(dst)])
+
+
+def render_video_scene(clip: Path, mp3: Path, ass: Path, dest: Path, seconds: float, work: Path, n: int):
+    """Scene built from an AI-animated clip: ping-pong loop to the narration length, then captions."""
+    loop_src = work / f"pingpong_{n:02d}.mp4"
+    make_pingpong(clip, loop_src)
+    vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+          f"fps={FPS},setsar=1,format=yuv420p,ass='{ass.as_posix()}'")
+    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i", str(loop_src),
+         "-i", str(mp3), "-vf", vf, "-af", f"apad=whole_dur={seconds:.3f}", "-map", "0:v:0", "-map", "1:a:0",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-t", f"{seconds:.3f}", str(dest)])
+
+
 def make_thumbnail(story: dict, frames: Path, dest: Path):
     from PIL import Image, ImageDraw, ImageFont
     src = frames / "thumbnail.png"
@@ -125,10 +145,15 @@ def main() -> int:
         image = next((p for p in (FRAMES / f"scene_{n:02d}.png", FRAMES / f"scene_{n:02d}.jpg") if p.exists()), None)
         if image is None:
             raise SystemExit(f"Missing image for scene {n} in {FRAMES}")
+        animated = FRAMES / f"scene_{n:02d}.mp4"  # optional AI-animated clip (see notebook step 2b)
         mp3, ass, clip = work / f"voice_{n:02d}.mp3", work / f"cap_{n:02d}.ass", work / f"scene_{n:02d}.mp4"
         words = asyncio.run(synth(scene["narration"], mp3))
         write_ass(words, ass)
-        render_scene(i, image, mp3, ass, clip, probe_duration(mp3) + TAIL)
+        seconds = probe_duration(mp3) + TAIL
+        if animated.exists():
+            render_video_scene(animated, mp3, ass, clip, seconds, work, n)
+        else:
+            render_scene(i, image, mp3, ass, clip, seconds)
         clips.append(clip)
         print(f"[RENDER] scene {n}/{len(scenes)}", flush=True)
     listing = work / "clips.txt"

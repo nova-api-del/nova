@@ -40,6 +40,7 @@ def build_prompt(character: dict, insights: dict) -> tuple[str, str]:
 Structure: shocking first line hook, escalating problems day by day, clever realistic survival decisions, a turning point,
 an emotional ending, and a short closing line asking viewers to subscribe. Simple spoken English (grade 6-8), short sentences.
 
+Set "key_moment": true on exactly 5 scenes: the opening hook, the first big danger, the turning point, the climax and the ending.
 Length: {MIN_SCENES + 6} scenes. Each scene narration 30-40 words (total about 1300-1500 words, roughly 9-10 minutes).
 
 {"Past videos that performed best (learn the pattern, do NOT repeat them):" + chr(10) + chr(10).join(top) if top else ""}
@@ -53,7 +54,7 @@ JSON schema:
  "thumb_text": "2-4 punchy words for the thumbnail",
  "thumbnail_visual": "one vivid scene description for the thumbnail image, character reacting with strong emotion",
  "scenes": [
-   {{"narration": "30-40 words", "visual": "concrete visual description of the moment (setting, action, mood, no text)", "has_character": true}}
+   {{"narration": "30-40 words", "visual": "concrete visual description of the moment (setting, action, mood, no text)", "has_character": true, "key_moment": false}}
  ]
 }}"""
     return system, user
