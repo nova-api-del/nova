@@ -2,9 +2,12 @@
 """Nova GTA 6 long-form factory: ~8-10 minute cinematic trailer-footage documentary."""
 from __future__ import annotations
 from pathlib import Path
-import sys, re, json, asyncio
+import sys, re, json, asyncio, os
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cinematic_shorts as cs
+
+# Warm, conversational neural narration.
+cs.VOICE = os.getenv("GTA6_LONG_VOICE", "en-US-AndrewNeural")
 
 TOPIC = {
     "title": "GTA 6: The Biggest Details Hidden in Vice City",
@@ -29,6 +32,16 @@ TOPIC = {
         ("The cinematic presentation", "Rockstar's trailers are edited to show the world at its most cinematic, so we should separate what is confirmed gameplay from what is trailer presentation. Even so, the density of locations, characters, vehicles, and environmental detail gives a strong indication of the production ambition."),
         ("What we still do not know", "There are still major questions. We do not know every system, every mission, every location, or exactly how the final game will behave once millions of players start interacting with it. The trailers are evidence of the direction, not a complete manual for the finished game."),
         ("Why the wait matters", "That uncertainty is part of the excitement. GTA 6 has become one of the most anticipated games ever, and every new frame gets examined for clues. The reason is simple: Rockstar is not just returning to Vice City. It is attempting to redefine what a living open world can look like."),
+        ("The first five minutes matter", "A strong opening has to do more than list features. It needs to give viewers a reason to stay. That is why the most interesting question is not how many buildings are on the map, but what could happen when Jason and Lucia move through a city that never seems to stand still. Every street can introduce a new character, a new risk, or an unexpected opportunity."),
+        ("The relationship at the center", "The partnership between Jason and Lucia could give the entire adventure its emotional engine. Crime stories become memorable when the people involved have something to lose. Trust, loyalty, ambition, and fear can turn even a simple plan into a complicated decision. The trailers hint at that tension, but the full story will reveal how far each character is willing to go."),
+        ("A city that tells stories", "Look beyond the main characters for a moment. A crowded gas station, a roadside shop, a busy beach, or a late-night restaurant can make a location feel like it existed before the player arrived. These little moments are powerful because they suggest that the world has its own rhythm, even when the player is not watching."),
+        ("The sound of Vice City", "Visuals are only half of immersion. Engines passing in the distance, conversations in public spaces, music spilling out of clubs, waves along the coast, and sudden changes in the weather can make a location feel real. A carefully layered soundscape can make the difference between looking at a digital city and feeling as if you are standing inside it."),
+        ("Weather and atmosphere", "Weather can also change the personality of a place. A sunny street, a humid evening, a sudden storm, or reflections after rainfall can transform the same route into a different experience. If these conditions influence traffic, visibility, crowds, and the mood of a scene, they become more than decoration."),
+        ("The freedom to explore", "Open-world games are at their best when curiosity is rewarded. A road that looks unimportant might lead to a hidden location. A quiet stretch of coastline might reveal a new activity. A distant building might become the setting for a mission later in the story. The promise of Leonida is that exploration could feel worthwhile even when there is no mission marker telling players where to go."),
+        ("The pressure of every decision", "A criminal story also needs consequences. A chase is exciting in the moment, but it becomes more meaningful when the player feels the pressure behind it. Who can be trusted? What happens when a plan goes wrong? How much attention is too much? The strongest missions make players think about those questions while the action is unfolding."),
+        ("Separating fact from speculation", "There is one important thing to remember while studying every trailer frame: not every detail confirms a gameplay feature. Some shots are cinematic, some are carefully staged, and some may represent systems that change before release. It is exciting to make predictions, but the most honest breakdown keeps confirmed footage separate from theories."),
+        ("What could make it unforgettable", "The graphics will attract attention, but the moments players remember may be much smaller. A conversation that changes the mood, a close escape through traffic, a surprising encounter away from the city, or a quiet drive after a difficult mission can stay with someone longer than a spectacular explosion. Great open worlds create stories players make themselves."),
+        ("The countdown to Leonida", "Until the game is in players' hands, every new trailer will create more questions than answers. That is part of the fun. We can examine the locations, compare details, and debate what the footage might mean, while remembering that the finished experience is what matters. When the doors finally open, the real test will be whether Leonida feels like a world worth getting lost in."),
         ("The final question", "When players finally enter Leonida, the most important test will not be the graphics. It will be whether the world feels unpredictable. If the streets, beaches, wetlands, highways, crowds, characters, and wildlife all work together, Vice City could become a place players remember for years.")
     ],
     "queries": [
@@ -69,6 +82,8 @@ def make_narration():
     return " ".join([TOPIC["hook"]] + [f"{h}. {body}" for h, body in TOPIC["sections"]])
 
 async def make_voice(text, path):
+    # A steady -5% pace sounds less rushed and leaves room for emphasis.
+    os.environ["TTS_FIXED_RATE"] = os.getenv("TTS_FIXED_RATE", "-5")
     return await cs._make_voice(text, path)
 
 def build(slot: int):
