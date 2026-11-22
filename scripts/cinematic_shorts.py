@@ -714,7 +714,7 @@ def find_video(query: str, used: set[str], dest: Path):
 
 async def _make_voice(text: str, path: Path):
     words = len(re.findall(r"\b[\w'-]+\b", text))
-    rate = round((words / 145 / (55 / 60) - 1) * 100)
+    rate = int(os.getenv("TTS_FIXED_RATE", str(round((words / 145 / (55 / 60) - 1) * 100))))
     rate = max(-10, min(30, rate))
     communicate = edge_tts.Communicate(text, VOICE, rate=f"{rate:+d}%", boundary="WordBoundary")
     boundaries = []
