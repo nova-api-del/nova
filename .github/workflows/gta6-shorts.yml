@@ -1,0 +1,92 @@
+name: Nova GTA 6 Shorts Factory
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Number of GTA 6 Shorts to build"
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-gta6-factory
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COUNT: ${{ github.event.inputs.count || '1' }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+      POLLINATIONS_IMAGE_MODEL: ${{ vars.POLLINATIONS_IMAGE_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+          github-token: ${{ github.token }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          pip install --disable-pip-version-check -r requirements-shorts.txt
+      - name: Build GTA 6 Short
+        run: |
+          rm -rf output
+          mkdir -p output
+          for i in $(seq 0 $((COUNT-1))); do
+            python scripts/gta6_shorts.py --slot "$i"
+          done
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import glob, json, subprocess, sys
+          files = sorted(glob.glob("output/short_*.json"))
+          if not files: raise SystemExit("No Short metadata produced")
+          for p in files:
+              m=json.load(open(p))
+              if m.get("quality_gate") != "passed": raise SystemExit(f"quality gate failed: {p}")
+              if not 45 <= float(m.get("duration_seconds",0)) <= 64: raise SystemExit(f"duration failed: {p}")
+              if len(m.get("sources",[])) != 5: raise SystemExit(f"scene count failed: {p}")
+          for mp4 in glob.glob("output/short_*.mp4"):
+              r=subprocess.run(["ffprobe","-v","error","-show_entries","stream=codec_type,width,height","-of","json",mp4],capture_output=True,text=True)
+              if r.returncode != 0: raise SystemExit(f"ffprobe failed: {mp4}")
+              streams=json.loads(r.stdout)["streams"]
+              v=next((s for s in streams if s.get("codec_type")=="video"),{})
+              if (v.get("width"),v.get("height")) != (1080,1920) or not any(s.get("codec_type")=="audio" for s in streams):
+                  raise SystemExit(f"format failed: {mp4}")
+          print(f"PASS: {len(files)} GTA 6 Shorts")
+          PY
+      - name: Upload Shorts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-gta6-shorts-${{ github.run_number }}
+          path: output/short_*.mp4
+          retention-days: 7
+      - name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-gta6-metadata-${{ github.run_number }}
+          path: output/*.json
+          retention-days: 7
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nova-gta6-${{ github.run_number }}
+          name: Nova GTA 6 Shorts ${{ github.run_number }}
+          files: |
+            output/short_*.mp4
+            output/*.json
+          generate_release_notes: false
