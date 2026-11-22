@@ -20,7 +20,7 @@ jobs:
       - name: Install FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          sudo apt-get install -y ffmpeg fonts-dejavu-core espeak-ng
       - name: Install Python dependencies
         run: python -m pip install requests pillow
       - name: Render five-minute illustrated episode
